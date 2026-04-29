@@ -1232,6 +1232,7 @@ function playGame(id){
   const prog=(sd.date===today?sd.progress:0)+1;
   localStorage.setItem(DK,JSON.stringify({date:today,progress:prog}));
   if(prog>=5){grantBadge(S.user,'daily_player');addXP(S.user,50);}
+  else if(prog===1){addXP(S.user,10);}
   else addXP(S.user,5);
   grantBadge(S.user,'first_game');
   const html=g.htmlContent||localStorage.getItem('hn_h'+g.id);
@@ -1250,6 +1251,7 @@ function rateGame(gid,val){
   if(g.ratings.some(r=>r.uid===S.user.id)){toast('warn','fa-star','Already rated!');return;}
   g.ratings.push({uid:S.user.id,val});
   saveDB();grantBadge(S.user,'rater');
+  addXP(S.user,15);
   toast('success','fa-star','Rated! Thank you ⭐');
   rGameDetail(gid);
 }
@@ -1264,6 +1266,7 @@ function submitCmt(gid){
   if(!g.comments)g.comments=[];
   g.comments.push({uid:S.user.id,user:S.user.username,name:S.user.name||S.user.username,text,time:Date.now()});
   saveDB();grantBadge(S.user,'commentator');
+  addXP(S.user,15);
   toast('success','fa-paper-plane','Comment posted!');
   rGameDetail(gid);
 }
@@ -1277,10 +1280,18 @@ function delCmt(gid,idx){
 
 // ═══ XP & BADGES ═══
 function addXP(u,amt){
-  u.xp=(u.xp||0)+amt;u.level=Math.floor(u.xp/100)+1;u.gamesPlayed=(u.gamesPlayed||0)+1;
+  u.xp=(u.xp||0)+amt;
+  const prevLevel=u.level||1;
+  u.level=Math.floor(u.xp/100)+1;
+  u.gamesPlayed=(u.gamesPlayed||0)+1;
+  // Level 3 bonus — only once
+  if(u.level>=3 && prevLevel<3){
+    grantBadge(u,'lvl5');
+    u.xp+=100; u.level=Math.floor(u.xp/100)+1;
+    toast('success','fa-trophy','Level 3 reached! +100 XP Bonus! 🎉');
+  }
   const du=DB.users.find(x=>x.id===u.id);if(du)Object.assign(du,u);
   sSet(u);saveDB();toast('info','fa-star',`+${amt} XP!`);
-  if(u.level>=3)grantBadge(u,'lvl5');
   if(u.gamesPlayed>=10)grantBadge(u,'plays10');
   if(u.gamesPlayed>=50)grantBadge(u,'plays50');
 }

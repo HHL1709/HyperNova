@@ -255,8 +255,8 @@ textarea.fi{resize:vertical;min-height:70px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r2);padding:16px;transition:.2s}
 .card:hover{border-color:rgba(0,245,255,.2)}
 .social-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:11px;margin-top:14px}
-.soccard{background:var(--card);border:1px solid var(--border);border-radius:var(--r2);padding:14px;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;transition:.2s;text-decoration:none}
-.soccard:hover{transform:translateY(-2px);border-color:var(--cyan)}
+.soccard{background:var(--card);border:1px solid var(--border);border-radius:var(--r2);padding:18px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;transition:.2s;text-decoration:none}
+.soccard:hover{transform:translateY(-3px);border-color:var(--cyan);box-shadow:var(--glow-c)}
 .copyright{text-align:center;padding:18px;font-size:11px;color:var(--t3);border-top:1px solid var(--border);margin-top:28px}
 .hidden{display:none!important}
 .flex{display:flex}.gap6{gap:6px}.gap8{gap:8px}.gap10{gap:10px}.gap12{gap:12px}
@@ -428,7 +428,7 @@ const DB={
   games:[],
   categories:['Action','Adventure','Puzzle','Racing','Sports','Strategy','Arcade','RPG'],
   announcements:[],
-  about:{text:'Welcome to HyperNova — the next-gen gaming portal!\n\nAdd your description here.',photo:''},
+  about:{text:'Welcome to HyperNova — the next-gen gaming portal!\n\nA premium gaming portal where players discover and experience the best browser-based games. We curate high-quality titles across 8 categories — from action to puzzles. Our mission is to deliver an exceptional gaming experience for everyone.\n\nFeatures:\n• 50+ Games across multiple categories\n• Instant Play — no downloads needed\n• Safe & Secure — content ratings enforced\n• Community Rated — genuine reviews from real players\n• Admin Control — full content management\n• Fully Responsive — mobile, tablet, laptop & desktop',photo:''},
   contact:{instagram:'',youtube:'',github:'',linkedin:'',gmail:''}
 };
 
@@ -805,7 +805,7 @@ function rGameDetail(gid){
   el.innerHTML=`
     <button class="bbtn" onclick="history.back()"><i class="fa-solid fa-arrow-left"></i> BACK</button>
     <div class="gdh">
-      ${g.thumb?`<img class="gdhi" src="${g.thumb}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><div class="gdhp" style="display:none">${cIcon(g.category)}</div>`:
+      ${(g.banner||g.thumb)?`<img class="gdhi" src="${g.banner||g.thumb}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><div class="gdhp" style="display:none">${cIcon(g.category)}</div>`:
       `<div class="gdhp">${cIcon(g.category)}</div>`}
       <div class="gdinfo">
         <div class="gdtitle">${g.title}</div>
@@ -954,7 +954,7 @@ function rAbout(){
       <div class="field"><label>ABOUT TEXT</label><textarea id="abTxt" class="fi" style="min-height:110px">${ab.text||''}</textarea></div>
       <button class="btn btn-cyan btn-sm" onclick="saveAbout()"><i class="fa-solid fa-check"></i> SAVE</button>
     </div>`:''}
-    ${ab.photo?`<img src="${ab.photo}" style="width:100%;max-height:250px;object-fit:cover;border-radius:var(--r2);margin-bottom:16px;display:block" alt="About"/>`:''}
+    ${ab.photo?`<div style="display:flex;justify-content:center;margin-bottom:20px"><img src="${ab.photo}" style="width:180px;height:180px;object-fit:cover;border-radius:50%;border:3px solid var(--cyan);box-shadow:var(--glow-c);display:block" alt="About"/></div>`:''}
     <div class="card"><div style="color:var(--t2);font-size:14px;line-height:1.8;white-space:pre-wrap;word-break:break-word">${ab.text||'Welcome to HyperNova!'}</div></div>
     <div class="copyright">© 2025 HyperNova · All rights reserved · Designed & Developed by <strong style="color:var(--cyan)">Harsh Lalka</strong></div>`;
 }
@@ -989,8 +989,8 @@ function rContact(){
         if(!isA&&!lnk)return'';
         const href=s.k==='gmail'?`mailto:${lnk}`:lnk;
         return`<a class="soccard" ${lnk?`href="${href}" target="_blank" rel="noopener"`:'style="opacity:.4;cursor:default"'}>
-          <i class="${s.ic}" style="color:${s.col};font-size:26px"></i>
-          <span style="font-size:12px;color:var(--t2);font-family:var(--fh);letter-spacing:1px">${s.lb}</span>
+          <i class="${s.ic}" style="color:${s.col};font-size:40px"></i>
+          <span style="font-size:12px;color:var(--t1);font-family:var(--fh);letter-spacing:1px">${s.lb}</span>
           <span style="font-size:10px;color:${lnk?'var(--cyan)':'var(--t3)'}">${lnk?'Visit →':'Not set'}</span>
         </a>`;}).join('')}
     </div>
@@ -1016,8 +1016,10 @@ function gform(g){
     <div class="field"><label>BADGE</label><select id="gB" class="fi"><option value="">None</option><option ${g&&g.badge==='NEW'?'selected':''} value="NEW">NEW</option><option ${g&&g.badge==='HOT'?'selected':''} value="HOT">HOT</option><option ${g&&g.badge==='TOP'?'selected':''} value="TOP">TOP</option></select></div>
     <div class="field"><label>GAME URL</label><input id="gU" class="fi" value="${g?g.url||'':''}" placeholder="https://game.com"/></div>
   </div>
-  <div class="field"><label>THUMBNAIL URL</label><input id="gThU" class="fi" value="${g?g.thumb||'':''}" placeholder="https://img.com/thumb.jpg"/></div>
-  <div class="field"><label>UPLOAD THUMBNAIL IMAGE (max 300KB)</label><input type="file" id="gThF" accept="image/*" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;color:var(--t2);width:100%;cursor:pointer"/></div>
+  <div class="field"><label>THUMBNAIL URL (Card Image)</label><input id="gThU" class="fi" value="${g?g.thumb||'':''}" placeholder="https://img.com/thumb.jpg"/></div>
+  <div class="field"><label>UPLOAD THUMBNAIL (max 300KB)</label><input type="file" id="gThF" accept="image/*" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;color:var(--t2);width:100%;cursor:pointer"/></div>
+  <div class="field"><label>BANNER URL (Detail Page Top Image)</label><input id="gBnU" class="fi" value="${g?g.banner||'':''}" placeholder="https://img.com/banner.jpg (wide image)"/></div>
+  <div class="field"><label>UPLOAD BANNER IMAGE (max 500KB)</label><input type="file" id="gBnF" accept="image/*" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;color:var(--t2);width:100%;cursor:pointer"/></div>
   <div class="field"><label>UPLOAD HTML GAME FILE</label><input type="file" id="gF" accept=".html,.htm" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;color:var(--t2);width:100%;cursor:pointer"/>
     ${g&&g.htmlContent?`<div style="color:var(--green);font-size:11px;margin-top:4px"><i class="fa-solid fa-check"></i> HTML file already uploaded</div>`:''}
   </div>`;
@@ -1026,13 +1028,23 @@ function gform(g){
 function saveGame(gid){
   const title=ge('gT')?.value.trim();
   if(!title){toast('error','fa-xmark','Title required!');return;}
-  const data={title,category:ge('gC')?.value||'',description:ge('gD')?.value.trim()||'',thumb:ge('gThU')?.value.trim()||'',badge:ge('gB')?.value||'',url:ge('gU')?.value.trim()||''};
-  const thFile=ge('gThF')?.files[0],gFile=ge('gF')?.files[0];
+  const data={title,category:ge('gC')?.value||'',description:ge('gD')?.value.trim()||'',thumb:ge('gThU')?.value.trim()||'',banner:ge('gBnU')?.value.trim()||'',badge:ge('gB')?.value||'',url:ge('gU')?.value.trim()||''};
+  const thFile=ge('gThF')?.files[0],bnFile=ge('gBnF')?.files[0],gFile=ge('gF')?.files[0];
 
   const withThumb=p=>{
     if(p)data.thumb=p;
-    if(gFile){const r=new FileReader();r.onload=e=>{data.htmlContent=e.target.result;finalSave(data,gid);};r.readAsText(gFile);}
-    else{if(gid){const g=DB.games.find(x=>x.id===gid);if(g&&g.htmlContent)data.htmlContent=g.htmlContent;}finalSave(data,gid);}
+    if(bnFile){
+      if(bnFile.size>500*1024){toast('error','fa-xmark','Banner max 500KB!');return;}
+      const r2=new FileReader();r2.onload=e2=>{data.banner=e2.target.result;withGame(data);};r2.readAsDataURL(bnFile);
+    }else{
+      if(gid){const g=DB.games.find(x=>x.id===gid);if(g&&g.banner&&!data.banner)data.banner=g.banner;}
+      withGame(data);
+    }
+  };
+
+  const withGame=d=>{
+    if(gFile){const r=new FileReader();r.onload=e=>{d.htmlContent=e.target.result;finalSave(d,gid);};r.readAsText(gFile);}
+    else{if(gid){const g=DB.games.find(x=>x.id===gid);if(g&&g.htmlContent)d.htmlContent=g.htmlContent;}finalSave(d,gid);}
   };
 
   if(thFile){

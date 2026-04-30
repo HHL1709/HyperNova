@@ -452,10 +452,17 @@ function initFB(){
       setFBS(true);
       if(!S.user)trySession();else rerender();
     });
+    let _fbDebounce=null;
     _ref.on('value',snap=>{
       if(_own){_own=false;return;}
       const d=snap.val();
-      if(d&&_fbr){applyDB(d);if(S.user)rerender();}
+      if(d&&_fbr){
+        clearTimeout(_fbDebounce);
+        _fbDebounce=setTimeout(()=>{
+          applyDB(d);
+          if(S.user) rerender();
+        },500);
+      }
     });
   }catch(e){console.warn(e);_fbr=true;loadLoc();trySession();}
 }
@@ -522,7 +529,7 @@ function doLogin(){
   S.user=found;sSet(found);
   ge('loginPage').style.display='none';ge('app').style.display='block';
   initApp(false);toast('success','fa-bolt-lightning','Welcome, '+found.name+'!');
-  grantBadge(found,'first_login');
+  grantBadgeNoSave(found,'first_login');saveDB();
 }
 
 function doRegister(){
@@ -581,6 +588,8 @@ function renderHdr(){
 
 function navigate(page,id){
   S.page=page;S.gid=id||null;
+  // Clear any old object URLs
+  if(window._lastObjUrl){try{URL.revokeObjectURL(window._lastObjUrl);}catch(e){}window._lastObjUrl=null;}
   spSave(page,id||null);
   const hash=id?`#${page}/${id}`:`#${page}`;
   if(window.location.hash!==hash)history.pushState({page,id:id||null},'',hash);
@@ -591,7 +600,12 @@ function navigate(page,id){
   updBadge();
 }
 function nav(p,id){navigate(p,id);}
-function rerender(){if(S.user&&ge('pc'))navigate(S.page,S.gid);}
+let _rerenderTimer=null;
+function rerender(){
+  if(!S.user||!ge('pc'))return;
+  clearTimeout(_rerenderTimer);
+  _rerenderTimer=setTimeout(()=>navigate(S.page,S.gid),300);
+}
 function updBadge(){const b=ge('gbadge');if(b)b.textContent=DB.games.length;}
 
 // ═══ HOME ═══
@@ -643,6 +657,8 @@ function rCats(){
 
 // ═══ LEADERBOARD ═══
 function rLB(){
+  const fresh=DB.users.find(x=>x.id===S.user?.id);
+  if(fresh) S.user=fresh;
   const el=ge('pc');
   const sorted=[...DB.users].filter(u=>u.role==='player'&&!u.locked).sort((a,b)=>(b.xp||0)-(a.xp||0));
   el.innerHTML=`<div class="phdr"><h2>LEADERBOARD</h2><p>Top players by XP</p><div class="cline"></div></div>
@@ -661,6 +677,8 @@ function rLB(){
 
 // ═══ PROFILE ═══
 function rProfile(){
+  const fresh=DB.users.find(x=>x.id===S.user?.id);
+  if(fresh) S.user=fresh;
   const el=ge('pc'),u=S.user,isA=u?.role==='admin';
   const xpN=u.level*100,xpP=Math.min(100,Math.round(((u.xp||0)%xpN)/xpN*100));
   const allB=[
@@ -717,7 +735,7 @@ function changeAvatar(){
   const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
   inp.onchange=e=>{
     const file=e.target.files[0];if(!file)return;
-    if(file.size>500*1024){toast('error','fa-xmark','Max 500KB!');return;}
+    if(file.size>50*1024*1024){toast('error','fa-xmark','Max 50MB!');return;}
     const r=new FileReader();
     r.onload=ev=>{
       const u=S.user;u.avatar=ev.target.result;
@@ -747,6 +765,9 @@ function saveProfile(){
 
 // ═══ CHALLENGES ═══
 function rChallenges(){
+  // Refresh user from DB to get latest XP/badges
+  const fresh=DB.users.find(x=>x.id===S.user?.id);
+  if(fresh) S.user=fresh;
   const el=ge('pc');
   const today=new Date().toDateString();
   const sd=JSON.parse(localStorage.getItem(DK)||'{}');
@@ -958,7 +979,7 @@ function rAbout(){
     ${isA?`<div class="card mb14">
       <div class="stitle mb10"><i class="fa-solid fa-pen cy"></i> EDIT ABOUT</div>
       <div class="field"><label>PHOTO URL</label><input id="abUrl" class="fi" value="${ab.photo||''}" placeholder="https://image.com/photo.jpg"/></div>
-      <div class="field"><label>OR UPLOAD PHOTO (max 500KB)</label><input type="file" id="abFile" accept="image/*" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;color:var(--t2);width:100%;cursor:pointer"/></div>
+      <div class="field"><label>OR UPLOAD PHOTO (max 50MB)</label><input type="file" id="abFile" accept="image/*" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;color:var(--t2);width:100%;cursor:pointer"/></div>
       <div class="field"><label>ABOUT TEXT</label><textarea id="abTxt" class="fi" style="min-height:110px">${ab.text||''}</textarea></div>
       <button class="btn btn-cyan btn-sm" onclick="saveAbout()"><i class="fa-solid fa-check"></i> SAVE</button>
     </div>`:''}
@@ -1154,7 +1175,7 @@ function gform(g){
     <div class="field"><label>GAME URL (online link)</label><input id="gU" class="fi" value="${g?g.url||'':''}" placeholder="https://game.com"/></div>
   </div>
   <div class="field"><label>GAME PHOTO URL</label><input id="gThU" class="fi" value="${g?g.thumb||'':''}" placeholder="https://img.com/photo.jpg"/></div>
-  <div class="field"><label>OR UPLOAD GAME PHOTO (max 500KB)</label><input type="file" id="gThF" accept="image/*" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;color:var(--t2);width:100%;cursor:pointer"/>
+  <div class="field"><label>OR UPLOAD GAME PHOTO (max 50MB)</label><input type="file" id="gThF" accept="image/*" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;color:var(--t2);width:100%;cursor:pointer"/>
     ${g&&g.thumb?`<div style="color:var(--green);font-size:11px;margin-top:4px"><i class="fa-solid fa-check"></i> Photo already set</div>`:''}
   </div>
   <div class="field"><label>UPLOAD HTML GAME FILE</label><input type="file" id="gF" accept=".html,.htm" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;color:var(--t2);width:100%;cursor:pointer"/>
@@ -1176,7 +1197,7 @@ function saveGame(gid){
   };
 
   if(thFile){
-    if(thFile.size>500*1024){toast('error','fa-xmark','Photo max 500KB!');return;}
+    if(thFile.size>50*1024*1024){toast('error','fa-xmark','Photo max 50MB!');return;}
     const r=new FileReader();r.onload=e=>withThumb(e.target.result);r.readAsDataURL(thFile);
   }else withThumb(null);
 }
@@ -1226,17 +1247,26 @@ function delAnn(i){DB.announcements.splice(i,1);saveDB();rAdmin();}
 function playGame(id){
   const g=DB.games.find(x=>x.id===parseInt(id)||x.id==id);
   if(!g){toast('error','fa-xmark','Game not found!');return;}
-  g.plays=(g.plays||0)+1;saveDB();
+  g.plays=(g.plays||0)+1;
   const today=new Date().toDateString();
   const sd=JSON.parse(localStorage.getItem(DK)||'{}');
   const prog=(sd.date===today?sd.progress:0)+1;
   localStorage.setItem(DK,JSON.stringify({date:today,progress:prog}));
-  if(prog>=5){grantBadge(S.user,'daily_player');addXP(S.user,50);}
-  else if(prog===1){addXP(S.user,10);}
-  else addXP(S.user,5);
-  grantBadge(S.user,'first_game');
+  // XP logic
+  if(prog>=5){
+    addXP(S.user,50,true);
+    setTimeout(()=>toast('success','fa-fire','Daily Challenge done! +50 XP 🔥'),500);
+  }else if(prog===1){addXP(S.user,10,true);}
+  else{addXP(S.user,5,true);}
+  grantBadgeNoSave(S.user,'first_game');
+  // Single save for all changes
+  const du=DB.users.find(x=>x.id===S.user.id);if(du)Object.assign(du,S.user);
+  saveDB();
+  // Launch game
   const html=g.htmlContent||localStorage.getItem('hn_h'+g.id);
-  const src=html?URL.createObjectURL(new Blob([html],{type:'text/html'})):g.url;
+  const objUrl=html?URL.createObjectURL(new Blob([html],{type:'text/html'})):null;
+  window._lastObjUrl=objUrl;
+  const src=objUrl||g.url;
   if(!src){toast('error','fa-xmark','No game file uploaded!');return;}
   ge('ftitle').textContent=g.title.toUpperCase();
   ge('gif').src=src;
@@ -1250,9 +1280,10 @@ function rateGame(gid,val){
   if(!g.ratings)g.ratings=[];
   if(g.ratings.some(r=>r.uid===S.user.id)){toast('warn','fa-star','Already rated!');return;}
   g.ratings.push({uid:S.user.id,val});
-  saveDB();grantBadge(S.user,'rater');
-  addXP(S.user,15);
-  toast('success','fa-star','Rated! Thank you ⭐');
+  addXP(S.user,15,false);
+  grantBadgeNoSave(S.user,'rater');
+  saveDB();
+  toast('success','fa-star','Rated! +15 XP ⭐');
   rGameDetail(gid);
 }
 function hoverS(v){document.querySelectorAll('#sr i').forEach((s,i)=>{s.className=`fa-${i<v?'solid':'regular'} fa-star${i<v?' on':''}`;});}
@@ -1265,9 +1296,10 @@ function submitCmt(gid){
   const g=DB.games.find(x=>x.id===gid);if(!g)return;
   if(!g.comments)g.comments=[];
   g.comments.push({uid:S.user.id,user:S.user.username,name:S.user.name||S.user.username,text,time:Date.now()});
-  saveDB();grantBadge(S.user,'commentator');
-  addXP(S.user,15);
-  toast('success','fa-paper-plane','Comment posted!');
+  addXP(S.user,15,false);
+  grantBadgeNoSave(S.user,'commentator');
+  saveDB();
+  toast('success','fa-paper-plane','Comment posted! +15 XP');
   rGameDetail(gid);
 }
 
@@ -1279,26 +1311,37 @@ function delCmt(gid,idx){
 }
 
 // ═══ XP & BADGES ═══
-function addXP(u,amt){
+function addXP(u,amt,isPlay){
+  if(!u||!amt)return;
   u.xp=(u.xp||0)+amt;
   const prevLevel=u.level||1;
   u.level=Math.floor(u.xp/100)+1;
-  u.gamesPlayed=(u.gamesPlayed||0)+1;
+  if(isPlay) u.gamesPlayed=(u.gamesPlayed||0)+1;
   // Level 3 bonus — only once
-  if(u.level>=3 && prevLevel<3){
-    grantBadge(u,'lvl5');
-    u.xp+=100; u.level=Math.floor(u.xp/100)+1;
-    toast('success','fa-trophy','Level 3 reached! +100 XP Bonus! 🎉');
+  if(u.level>=3&&prevLevel<3){
+    u.xp+=100;u.level=Math.floor(u.xp/100)+1;
+    setTimeout(()=>toast('success','fa-trophy','Level 3! +100 XP Bonus 🎉'),400);
   }
   const du=DB.users.find(x=>x.id===u.id);if(du)Object.assign(du,u);
-  sSet(u);saveDB();toast('info','fa-star',`+${amt} XP!`);
-  if(u.gamesPlayed>=10)grantBadge(u,'plays10');
-  if(u.gamesPlayed>=50)grantBadge(u,'plays50');
+  sSet(u);
+  // Batch save — don't call saveDB here, caller will save
+  toast('info','fa-star',`+${amt} XP!`);
+  // Badge checks (no saveDB inside grantBadge to avoid double save)
+  if(isPlay){
+    if(u.gamesPlayed>=10)grantBadgeNoSave(u,'plays10');
+    if(u.gamesPlayed>=50)grantBadgeNoSave(u,'plays50');
+  }
+  if(u.level>=3)grantBadgeNoSave(u,'lvl5');
 }
 function grantBadge(u,b){
   if(!u||!b)return;if(!u.badges)u.badges=[];if(u.badges.includes(b))return;
   u.badges.push(b);const du=DB.users.find(x=>x.id===u.id);if(du)du.badges=[...u.badges];
-  saveDB();toast('success','fa-shield-halved','Badge unlocked!');
+  sSet(u);saveDB();setTimeout(()=>toast('success','fa-shield-halved','Badge unlocked! 🏅'),200);
+}
+function grantBadgeNoSave(u,b){
+  if(!u||!b)return;if(!u.badges)u.badges=[];if(u.badges.includes(b))return;
+  u.badges.push(b);const du=DB.users.find(x=>x.id===u.id);if(du)du.badges=[...u.badges];
+  sSet(u);setTimeout(()=>toast('success','fa-shield-halved','Badge unlocked! 🏅'),300);
 }
 function checkDaily(){
   const today=new Date().toDateString();

@@ -435,7 +435,7 @@ const DB={
   games:[],
   categories:['Action','Adventure','Puzzle','Racing','Sports','Strategy','Arcade','RPG'],
   announcements:[],
-  about:{text:'Welcome to HyperNova — the next-gen gaming portal!\n\nA premium gaming portal where players discover and experience the best browser-based games. We curate high-quality titles across 8 categories — from action to puzzles. Our mission is to deliver an exceptional gaming experience for everyone.\n\nFeatures:\n• 50+ Games across multiple categories\n• Instant Play — no downloads needed\n• Safe & Secure — content ratings enforced\n• Community Rated — genuine reviews from real players\n• Admin Control — full content management\n• Fully Responsive — mobile, tablet, laptop & desktop',photo:''},
+  about:{text:'Welcome to HyperNova — the next-gen gaming portal!\n\nA premium gaming portal where players discover and experience the best browser-based games. We curate high-quality titles across 8 categories — from action to puzzles. Our mission is to deliver an exceptional gaming experience for everyone.\n\nFeatures:\n• 50+ Games across multiple categories\n• Instant Play — no downloads needed\n• Safe & Secure — content ratings enforced\n• Community Rated — genuine reviews from real players\n• Admin Control — full content management\n• Fully Responsive — mobile, tablet, laptop & desktop',photo:'',devPhoto:'',devName:'Harsh Lalka',devRole:'Founder & Lead Developer',devBio:'A passionate developer who built HyperNova from the ground up to deliver the best browser gaming experience.'},
   contact:{instagram:'',youtube:'',github:'',linkedin:'',gmail:''}
 };
 
@@ -479,7 +479,7 @@ function applyDB(d){
   }
   if(d.categories)DB.categories=d.categories;
   if(d.announcements)DB.announcements=d.announcements;
-  if(d.about)DB.about=d.about;
+  if(d.about){DB.about={...{devPhoto:'',devName:'Harsh Lalka',devRole:'Founder & Lead Developer',devBio:''},...d.about};}
   if(d.contact)DB.contact=d.contact;
   updBadge();
 }
@@ -981,7 +981,18 @@ function rAbout(){
       <div class="field"><label>PHOTO URL</label><input id="abUrl" class="fi" value="${ab.photo||''}" placeholder="https://image.com/photo.jpg"/></div>
       <div class="field"><label>OR UPLOAD PHOTO (max 50MB)</label><input type="file" id="abFile" accept="image/*" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;color:var(--t2);width:100%;cursor:pointer"/></div>
       <div class="field"><label>ABOUT TEXT</label><textarea id="abTxt" class="fi" style="min-height:110px">${ab.text||''}</textarea></div>
-      <button class="btn btn-cyan btn-sm" onclick="saveAbout()"><i class="fa-solid fa-check"></i> SAVE</button>
+      <div style="height:1px;background:var(--border);margin:14px 0"></div>
+      <div class="stitle mb10"><i class="fa-solid fa-user cy"></i> DEVELOPER PROFILE</div>
+      <div class="field"><label>DEVELOPER PHOTO URL</label><input id="devPhotoUrl" class="fi" value="${ab.devPhoto||''}" placeholder="https://your-photo.jpg"/></div>
+      <div class="field"><label>OR UPLOAD DEVELOPER PHOTO (max 50MB)</label><input type="file" id="devPhotoFile" accept="image/*" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;color:var(--t2);width:100%;cursor:pointer"/>
+        ${ab.devPhoto?`<div style="color:var(--green);font-size:11px;margin-top:4px"><i class="fa-solid fa-check"></i> Photo already set</div>`:''}
+      </div>
+      <div class="irow">
+        <div class="field"><label>DEVELOPER NAME</label><input id="devName" class="fi" value="${ab.devName||'Harsh Lalka'}" placeholder="Your name"/></div>
+        <div class="field"><label>ROLE / TITLE</label><input id="devRole" class="fi" value="${ab.devRole||'Founder & Lead Developer'}" placeholder="Your role"/></div>
+      </div>
+      <div class="field"><label>SHORT BIO</label><textarea id="devBio" class="fi" style="min-height:60px">${ab.devBio||''}</textarea></div>
+      <button class="btn btn-cyan btn-sm" onclick="saveAbout()"><i class="fa-solid fa-check"></i> SAVE ALL</button>
     </div>`:''}
 
     <!-- Hero Section -->
@@ -1028,11 +1039,16 @@ function rAbout(){
     <div class="card mb16" style="background:linear-gradient(135deg,rgba(0,245,255,.05),rgba(255,0,110,.03))">
       <div class="stitle mb12"><i class="fa-solid fa-user cy"></i> CREATOR & DEVELOPER</div>
       <div class="flex gap12 aic wrap">
-        <div style="width:60px;height:60px;background:linear-gradient(135deg,var(--cyan),var(--pink));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;color:#000;flex-shrink:0;border:2px solid var(--cyan)">H</div>
+        <div style="flex-shrink:0">
+          ${ab.devPhoto?
+            `<img src="${ab.devPhoto}" style="width:80px;height:80px;object-fit:cover;border-radius:50%;border:2px solid var(--cyan);box-shadow:0 0 16px rgba(0,245,255,.4);display:block"/>`:
+            `<div style="width:80px;height:80px;background:linear-gradient(135deg,var(--cyan),var(--pink));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#000;border:2px solid var(--cyan)">${(ab.devName||'H').charAt(0).toUpperCase()}</div>`
+          }
+        </div>
         <div style="flex:1;min-width:160px">
-          <div style="font-family:var(--fh);font-size:14px;letter-spacing:2px;color:var(--t1)">HARSH LALKA</div>
-          <div style="font-size:12px;color:var(--cyan);letter-spacing:1px;margin-top:3px">FOUNDER & LEAD DEVELOPER</div>
-          <div style="font-size:13px;color:var(--t2);margin-top:6px;line-height:1.6">A passionate developer who built HyperNova from the ground up to deliver the best browser gaming experience.</div>
+          <div style="font-family:var(--fh);font-size:14px;letter-spacing:2px;color:var(--t1)">${(ab.devName||'HARSH LALKA').toUpperCase()}</div>
+          <div style="font-size:12px;color:var(--cyan);letter-spacing:1px;margin-top:3px">${ab.devRole||'FOUNDER & LEAD DEVELOPER'}</div>
+          <div style="font-size:13px;color:var(--t2);margin-top:6px;line-height:1.6">${ab.devBio||'A passionate developer who built HyperNova from the ground up to deliver the best browser gaming experience.'}</div>
         </div>
       </div>
     </div>
@@ -1041,10 +1057,32 @@ function rAbout(){
 }
 
 function saveAbout(){
-  const url=ge('abUrl')?.value.trim(),txt=ge('abTxt')?.value.trim(),file=ge('abFile')?.files[0];
-  const done=p=>{DB.about={photo:p||url||DB.about?.photo||'',text:txt||''};saveDB();rAbout();toast('success','fa-check','About saved!');};
-  if(file){const r=new FileReader();r.onload=e=>done(e.target.result);r.readAsDataURL(file);}
-  else done(url);
+  const url=ge('abUrl')?.value.trim();
+  const txt=ge('abTxt')?.value.trim();
+  const file=ge('abFile')?.files[0];
+  const devUrl=ge('devPhotoUrl')?.value.trim();
+  const devFile=ge('devPhotoFile')?.files[0];
+  const devName=ge('devName')?.value.trim()||DB.about?.devName||'Harsh Lalka';
+  const devRole=ge('devRole')?.value.trim()||DB.about?.devRole||'Founder & Lead Developer';
+  const devBio=ge('devBio')?.value.trim()||DB.about?.devBio||'';
+
+  const saveAll=(mainPhoto,devPhoto)=>{
+    DB.about={
+      photo:mainPhoto||url||DB.about?.photo||'',
+      text:txt||DB.about?.text||'',
+      devPhoto:devPhoto||devUrl||DB.about?.devPhoto||'',
+      devName,devRole,devBio
+    };
+    saveDB();rAbout();toast('success','fa-check','About saved!');
+  };
+
+  const getDevPhoto=(mainPhoto)=>{
+    if(devFile){const r=new FileReader();r.onload=e=>saveAll(mainPhoto,e.target.result);r.readAsDataURL(devFile);}
+    else saveAll(mainPhoto,null);
+  };
+
+  if(file){const r=new FileReader();r.onload=e=>getDevPhoto(e.target.result);r.readAsDataURL(file);}
+  else getDevPhoto(null);
 }
 
 // ═══ CONTACT ═══

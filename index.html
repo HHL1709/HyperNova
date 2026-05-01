@@ -423,6 +423,16 @@ const FBC={
 };
 
 const USE_FB=FBC.apiKey!=='YOUR_API_KEY';
+
+// ── GITHUB CONFIG ──
+const GITHUB_USER = 'HHL1709';
+const GITHUB_REPO = 'HyperNova';
+const GITHUB_BRANCH = 'main';
+const GITHUB_RAW = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}`;
+const GITHUB_API = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents`;
+// Get your GitHub Personal Access Token from: github.com/settings/tokens
+// Required scopes: repo (full control)
+window.GITHUB_TOKEN = sessionStorage.getItem('hn_ght') || 'YOUR_GITHUB_TOKEN';
 const SK='hn_s',PK='hn_p',DK='hn_d';
 const S={user:null,page:'home',gid:null};
 let _fbr=false,_ref=null,_own=false;
@@ -468,6 +478,8 @@ function initFB(){
 }
 
 function applyDB(d){
+  // Restore local photos first
+  restoreLocalPhotos(d);
   if(d.users&&Array.isArray(d.users)&&d.users.length>0){
     const ids=d.users.map(u=>u.id);
     DB.users=[...d.users,...DB.users.filter(u=>!ids.includes(u.id))];
@@ -475,30 +487,163 @@ function applyDB(d){
   if(d.games&&Array.isArray(d.games)){
     const gids=d.games.map(g=>g.id);
     DB.games=[...d.games,...DB.games.filter(g=>!gids.includes(g.id))];
-    DB.games.forEach(g=>{if(!g.htmlContent){const h=localStorage.getItem('hn_h'+g.id);if(h)g.htmlContent=h;}});
+    DB.games.forEach(g=>{if(!g.htmlContent){const h=getLocal('hn_h'+g.id);if(h)g.htmlContent=h;}});
   }
   if(d.categories)DB.categories=d.categories;
   if(d.announcements)DB.announcements=d.announcements;
-  if(d.about){DB.about={...{devPhoto:'',devName:'Harsh Lalka',devRole:'Founder & Lead Developer',devBio:''},...d.about};}
+  if(d.about){DB.about={devPhoto:'',devName:'Harsh Lalka',devRole:'Founder & Lead Developer',devBio:'',...d.about};}
   if(d.contact)DB.contact=d.contact;
+  // Sync current user's data
+  if(S.user){const fresh=DB.users.find(x=>x.id===S.user.id);if(fresh){S.user=fresh;sSet(fresh);renderHdr();}}
   updBadge();
 }
 
-function snap(){
-  const c=JSON.parse(JSON.stringify({users:DB.users,games:DB.games,categories:DB.categories,announcements:DB.announcements,about:DB.about,contact:DB.contact}));
-  c.games.forEach(g=>{if(g.htmlContent){try{localStorage.setItem('hn_h'+g.id,g.htmlContent);}catch(e){}delete g.htmlContent;}});
+// Save large base64 data to localStorage only (not Firebase)
+function storeLocal(key,val){try{if(val)localStorage.setItem(key,val);}catch(e){}}
+function getLocal(key){try{return localStorage.getItem(key)||'';}catch(e){return '';}}
+
+function snap(forFirebase){
+  const c=JSON.parse(JSON.stringify({
+    users:DB.users,games:DB.games,categories:DB.categories,
+    announcements:DB.announcements,about:DB.about,contact:DB.contact
+  }));
+  // Game HTML files — always store locally
+  c.games.forEach(g=>{
+    if(g.htmlContent){storeLocal('hn_h'+g.id,g.htmlContent);delete g.htmlContent;}
+    if(forFirebase&&g.thumb&&g.thumb.startsWith('data:')){
+      storeLocal('hn_th'+g.id,g.thumb);
+      g.thumb='__local_th'+g.id+'__';
+    }
+  });
+  if(forFirebase){
+    // Strip base64 photos from Firebase (too large) — store locally instead
+    c.users.forEach(u=>{
+      if(u.avatar&&u.avatar.startsWith('data:')){
+        storeLocal('hn_av'+u.id,u.avatar);
+        u.avatar='__local__'+u.id; // marker so we know to load from localStorage
+      }
+    });
+    if(c.about){
+      if(c.about.photo&&c.about.photo.startsWith('data:')){
+        storeLocal('hn_abp',c.about.photo);c.about.photo='__local_abp__';
+      }
+      if(c.about.devPhoto&&c.about.devPhoto.startsWith('data:')){
+        storeLocal('hn_devp',c.about.devPhoto);c.about.devPhoto='__local_devp__';
+      }
+    }
+  }
   return c;
 }
 
+function restoreLocalPhotos(d){
+  // Restore base64 photos from localStorage after loading from Firebase
+  if(d.users){
+    d.users.forEach(u=>{
+      if(u.avatar==='__local__'+u.id) u.avatar=getLocal('hn_av'+u.id);
+      else if(u.avatar&&u.avatar.startsWith('data:')) storeLocal('hn_av'+u.id,u.avatar);
+    });
+  }
+  if(d.about){
+    if(d.about.photo==='__local_abp__') d.about.photo=getLocal('hn_abp');
+    else if(d.about.photo&&d.about.photo.startsWith('data:')) storeLocal('hn_abp',d.about.photo);
+    if(d.about.devPhoto==='__local_devp__') d.about.devPhoto=getLocal('hn_devp');
+    else if(d.about.devPhoto&&d.about.devPhoto.startsWith('data:')) storeLocal('hn_devp',d.about.devPhoto);
+  }
+  if(d.games&&Array.isArray(d.games)){
+    d.games.forEach(g=>{
+      if(g.thumb&&g.thumb.startsWith('__local_th')){
+        const id=g.thumb.replace('__local_th','').replace('__','');
+        g.thumb=getLocal('hn_th'+id)||'';
+      } else if(g.thumb&&g.thumb.startsWith('data:')){
+        storeLocal('hn_th'+g.id,g.thumb);
+      }
+    });
+  }
+}
+
+// ── GITHUB UPLOAD ──
+async function uploadToGitHub(path, content, isBase64){
+  if(window.GITHUB_TOKEN==='YOUR_GITHUB_TOKEN'){
+    toast('warn','fa-triangle-exclamation','Set GitHub Token first!');
+    return null;
+  }
+  try{
+    // Check if file exists (to get SHA for update)
+    let sha = null;
+    try{
+      const check = await fetch(`${GITHUB_API}/${path}`,{
+        headers:{'Authorization':'token '+window.GITHUB_TOKEN,'Accept':'application/vnd.github.v3+json'}
+      });
+      if(check.ok){const d=await check.json();sha=d.sha;}
+    }catch(e){}
+
+    const body = {
+      message:`Upload ${path}`,
+      content: isBase64 ? content : btoa(unescape(encodeURIComponent(content))),
+    };
+    if(sha) body.sha = sha;
+
+    const res = await fetch(`${GITHUB_API}/${path}`,{
+      method:'PUT',
+      headers:{
+        'Authorization':'token '+window.GITHUB_TOKEN,
+        'Accept':'application/vnd.github.v3+json',
+        'Content-Type':'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if(res.ok){
+      const d = await res.json();
+      return d.content.download_url || `${GITHUB_RAW}/${path}`;
+    }else{
+      const err = await res.json();
+      toast('error','fa-xmark','Upload failed: '+err.message);
+      return null;
+    }
+  }catch(e){
+    toast('error','fa-xmark','Upload error: '+e.message);
+    return null;
+  }
+}
+
+// Convert file to base64 for GitHub upload
+function fileToBase64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      // Remove data:...;base64, prefix
+      const b64=e.target.result.split(',')[1];
+      res(b64);
+    };
+    r.onerror=rej;
+    r.readAsDataURL(file);
+  });
+}
+
 function saveDB(){
-  try{localStorage.setItem('hn_db',JSON.stringify(snap()));}catch(e){}
+  // Full data (with photos) saved locally
+  try{localStorage.setItem('hn_db',JSON.stringify(snap(false)));}catch(e){
+    // localStorage full — try without avatars
+    try{localStorage.setItem('hn_db',JSON.stringify(snap(true)));}catch(e2){}
+  }
   if(!USE_FB||!_ref)return;
+  // Firebase gets data WITHOUT base64 photos (stripped to markers)
   _own=true;
-  _ref.set(snap()).catch(e=>{_own=false;toast('error','fa-triangle-exclamation','Save failed: '+e.message);});
+  _ref.set(snap(true)).catch(e=>{_own=false;toast('error','fa-triangle-exclamation','Save failed: '+e.message);});
 }
 
 function pushDB(){if(_ref)_ref.set(snap());}
-function loadLoc(){try{const r=localStorage.getItem('hn_db');if(r)applyDB(JSON.parse(r));}catch(e){}}
+function loadLoc(){
+  try{
+    const r=localStorage.getItem('hn_db');
+    if(r){
+      const d=JSON.parse(r);
+      restoreLocalPhotos(d); // restore before applyDB
+      applyDB(d);
+    }
+  }catch(e){}
+}
 function setFBS(ok){const e=ge('fbStat');if(e)e.innerHTML=ok?'<i class="fa-solid fa-circle" style="color:var(--green);font-size:8px"></i> Server connected':'<i class="fa-solid fa-circle" style="color:var(--pink);font-size:8px"></i> Offline';}
 
 // ═══ SESSION ═══
@@ -513,7 +658,15 @@ function sGet(){
     S.user=u;return true;
   }catch(e){return false;}
 }
-function trySession(){if(sGet()){ge('loginPage').style.display='none';ge('app').style.display='block';initApp(true);}}
+function trySession(){
+  if(sGet()){
+    // Restore avatar from localStorage if it was stripped
+    if(S.user&&(!S.user.avatar||S.user.avatar.startsWith('__local__'))){
+      S.user.avatar=getLocal('hn_av'+S.user.id)||'';
+    }
+    ge('loginPage').style.display='none';ge('app').style.display='block';initApp(true);
+  }
+}
 function spSave(p,id){try{localStorage.setItem(PK,JSON.stringify({p,id:id||null}));}catch(e){}}
 function spLoad(){try{return JSON.parse(localStorage.getItem(PK)||'{"p":"home","id":null}');}catch(e){return{p:'home',id:null};}}
 
@@ -733,15 +886,21 @@ function rProfile(){
 
 function changeAvatar(){
   const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
-  inp.onchange=e=>{
+  inp.onchange=async e=>{
     const file=e.target.files[0];if(!file)return;
-    if(file.size>50*1024*1024){toast('error','fa-xmark','Max 50MB!');return;}
-    const r=new FileReader();
-    r.onload=ev=>{
-      const u=S.user;u.avatar=ev.target.result;
-      const du=DB.users.find(x=>x.id===u.id);if(du)du.avatar=ev.target.result;
-      saveDB();renderHdr();rProfile();toast('success','fa-check','Photo updated!');
-    };r.readAsDataURL(file);
+    toast('info','fa-circle-notch fa-spin','Uploading photo...');
+    const u=S.user;
+    const safeName=(u.username||'user').replace(/[^a-zA-Z0-9]/g,'_');
+    const ext=file.name.split('.').pop()||'jpg';
+    const path=`images/avatar_${safeName}.${ext}`;
+    const b64=await fileToBase64(file);
+    const url=await uploadToGitHub(path,b64,true);
+    if(url){
+      u.avatar=url;
+      const du=DB.users.find(x=>x.id===u.id);if(du)du.avatar=url;
+      saveDB();sSet(u);renderHdr();rProfile();
+      toast('success','fa-check','Photo updated! ✅');
+    }
   };inp.click();
 }
 
@@ -759,6 +918,7 @@ function saveProfile(){
   if(name)u.name=name;
   if(pass){if(pass.length<6){toast('error','fa-xmark','Password too short!');return;}u.password=pass;}
   const du=DB.users.find(x=>x.id===u.id);if(du)Object.assign(du,u);
+  if(u.avatar&&u.avatar.startsWith('data:'))storeLocal('hn_av'+u.id,u.avatar);
   sSet(u);saveDB();renderHdr();rProfile();
   toast('success','fa-check','Profile saved!');
 }
@@ -901,6 +1061,20 @@ function rGameDetail(gid){
 }
 
 // ═══ ADMIN ═══
+function setGHToken(){
+  const t=ge('ghTokenIn')?.value.trim();
+  if(!t||!t.startsWith('ghp_')){toast('error','fa-xmark','Invalid token! Must start with ghp_');return;}
+  // Store token in sessionStorage (not saved to Firebase for security)
+  sessionStorage.setItem('hn_ght',t);
+  // Update GITHUB_TOKEN variable
+  window.GITHUB_TOKEN=t;
+  toast('success','fa-check','GitHub token set! You can now upload files.');
+  rAdmin();
+}
+
+// Load token from session on startup
+(function(){const t=sessionStorage.getItem('hn_ght');if(t)window.GITHUB_TOKEN=t;})();
+
 function rAdmin(){
   if(S.user?.role!=='admin'){toast('error','fa-lock','Admin only!');nav('home');return;}
   const el=ge('pc');
@@ -1066,23 +1240,30 @@ function saveAbout(){
   const devRole=ge('devRole')?.value.trim()||DB.about?.devRole||'Founder & Lead Developer';
   const devBio=ge('devBio')?.value.trim()||DB.about?.devBio||'';
 
-  const saveAll=(mainPhoto,devPhoto)=>{
-    DB.about={
-      photo:mainPhoto||url||DB.about?.photo||'',
-      text:txt||DB.about?.text||'',
-      devPhoto:devPhoto||devUrl||DB.about?.devPhoto||'',
-      devName,devRole,devBio
-    };
-    saveDB();rAbout();toast('success','fa-check','About saved!');
+  toast('info','fa-circle-notch fa-spin','Saving...');
+
+  const doSave=async()=>{
+    let mainPhoto=url||DB.about?.photo||'';
+    let devPhoto=devUrl||DB.about?.devPhoto||'';
+
+    if(file){
+      const b64=await fileToBase64(file);
+      const ext=file.name.split('.').pop()||'jpg';
+      const uploaded=await uploadToGitHub(`images/about_banner.${ext}`,b64,true);
+      if(uploaded)mainPhoto=uploaded;
+    }
+    if(devFile){
+      const b64=await fileToBase64(devFile);
+      const ext=devFile.name.split('.').pop()||'jpg';
+      const uploaded=await uploadToGitHub(`images/dev_photo.${ext}`,b64,true);
+      if(uploaded)devPhoto=uploaded;
+    }
+
+    DB.about={photo:mainPhoto,text:txt||DB.about?.text||'',devPhoto,devName,devRole,devBio};
+    saveDB();rAbout();toast('success','fa-check','About saved! ✅');
   };
 
-  const getDevPhoto=(mainPhoto)=>{
-    if(devFile){const r=new FileReader();r.onload=e=>saveAll(mainPhoto,e.target.result);r.readAsDataURL(devFile);}
-    else saveAll(mainPhoto,null);
-  };
-
-  if(file){const r=new FileReader();r.onload=e=>getDevPhoto(e.target.result);r.readAsDataURL(file);}
-  else getDevPhoto(null);
+  doSave();
 }
 
 // ═══ CONTACT ═══
@@ -1227,27 +1408,59 @@ function saveGame(gid){
   const data={title,category:ge('gC')?.value||'',description:ge('gD')?.value.trim()||'',thumb:ge('gThU')?.value.trim()||'',badge:ge('gB')?.value||'',url:ge('gU')?.value.trim()||''};
   const thFile=ge('gThF')?.files[0],gFile=ge('gF')?.files[0];
 
-  const withThumb=p=>{
-    if(p)data.thumb=p;
-    else if(gid){const g=DB.games.find(x=>x.id===gid);if(g&&g.thumb&&!data.thumb)data.thumb=g.thumb;}
-    if(gFile){const r=new FileReader();r.onload=e=>{data.htmlContent=e.target.result;finalSave(data,gid);};r.readAsText(gFile);}
-    else{if(gid){const g=DB.games.find(x=>x.id===gid);if(g&&g.htmlContent)data.htmlContent=g.htmlContent;}finalSave(data,gid);}
+  // Keep existing data if editing
+  if(gid){
+    const g=DB.games.find(x=>x.id===gid);
+    if(g){
+      if(!data.thumb)data.thumb=g.thumb||'';
+      if(!data.url)data.url=g.url||'';
+      data.gameUrl=g.gameUrl||''; // existing game URL
+    }
+  }
+
+  toast('info','fa-circle-notch fa-spin','Uploading files...');
+
+  const doUpload=async()=>{
+    // Upload thumbnail to GitHub if file selected
+    if(thFile){
+      const safeName=title.replace(/[^a-zA-Z0-9]/g,'_').toLowerCase();
+      const ext=thFile.name.split('.').pop()||'jpg';
+      const path=`images/${safeName}_${Date.now()}.${ext}`;
+      const b64=await fileToBase64(thFile);
+      const url=await uploadToGitHub(path,b64,true);
+      if(url)data.thumb=url;
+    }
+
+    // Upload HTML game file to GitHub
+    if(gFile){
+      const safeName=title.replace(/[^a-zA-Z0-9]/g,'_').toLowerCase();
+      const path=`games/${safeName}_${Date.now()}.html`;
+      const text=await gFile.text();
+      const url=await uploadToGitHub(path,text,false);
+      if(url){data.gameUrl=url;data.htmlContent='';}// store URL not content
+    } else if(gid){
+      const g=DB.games.find(x=>x.id===gid);
+      if(g)data.gameUrl=g.gameUrl||'';
+    }
+
+    finalSave(data,gid);
   };
 
-  if(thFile){
-    if(thFile.size>50*1024*1024){toast('error','fa-xmark','Photo max 50MB!');return;}
-    const r=new FileReader();r.onload=e=>withThumb(e.target.result);r.readAsDataURL(thFile);
-  }else withThumb(null);
+  doUpload();
 }
 
 function finalSave(data,gid){
   if(gid){
     const g=DB.games.find(x=>x.id===gid);if(g)Object.assign(g,data);
+    // Store thumb locally if base64
+    if(data.thumb&&data.thumb.startsWith('data:'))storeLocal('hn_th'+gid,data.thumb);
     saveDB();closeMod();toast('success','fa-check','Game updated!');nav('gamedetail',gid);
   }else{
     data.id=DB.games.length>0?Math.max(...DB.games.map(x=>x.id))+1:1;
     data.plays=0;data.comments=[];data.ratings=[];
-    DB.games.push(data);saveDB();closeMod();updBadge();
+    DB.games.push(data);
+    if(data.thumb&&data.thumb.startsWith('data:'))storeLocal('hn_th'+data.id,data.thumb);
+    saveDB();closeMod();updBadge();
     toast('success','fa-check','Game added!');
     setTimeout(()=>nav('gamedetail',data.id),200);
   }
@@ -1300,11 +1513,20 @@ function playGame(id){
   // Single save for all changes
   const du=DB.users.find(x=>x.id===S.user.id);if(du)Object.assign(du,S.user);
   saveDB();
-  // Launch game
-  const html=g.htmlContent||localStorage.getItem('hn_h'+g.id);
-  const objUrl=html?URL.createObjectURL(new Blob([html],{type:'text/html'})):null;
-  window._lastObjUrl=objUrl;
-  const src=objUrl||g.url;
+  // Launch game — use GitHub URL if available, else local HTML, else game URL
+  let src=null;
+  if(g.gameUrl&&g.gameUrl.startsWith('http')){
+    src=g.gameUrl; // GitHub hosted game
+  } else {
+    const html=g.htmlContent||localStorage.getItem('hn_h'+g.id);
+    if(html){
+      const objUrl=URL.createObjectURL(new Blob([html],{type:'text/html'}));
+      window._lastObjUrl=objUrl;
+      src=objUrl;
+    } else {
+      src=g.url||null;
+    }
+  }
   if(!src){toast('error','fa-xmark','No game file uploaded!');return;}
   ge('ftitle').textContent=g.title.toUpperCase();
   ge('gif').src=src;

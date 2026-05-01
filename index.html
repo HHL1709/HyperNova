@@ -432,7 +432,7 @@ const GITHUB_RAW = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_RE
 const GITHUB_API = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents`;
 // Get your GitHub Personal Access Token from: github.com/settings/tokens
 // Required scopes: repo (full control)
-window.GITHUB_TOKEN = sessionStorage.getItem('hn_ght') || 'YOUR_GITHUB_TOKEN';
+window.GITHUB_TOKEN = localStorage.getItem('hn_ght') || 'YOUR_GITHUB_TOKEN';
 const SK='hn_s',PK='hn_p',DK='hn_d';
 const S={user:null,page:'home',gid:null};
 let _fbr=false,_ref=null,_own=false;
@@ -519,7 +519,7 @@ function snap(forFirebase){
     // Strip base64 photos from Firebase (too large) — store locally instead
     c.users.forEach(u=>{
       if(u.avatar&&u.avatar.startsWith('data:')){
-        storeLocal('hn_av'+u.id,u.avatar);
+        try{localStorage.setItem('hn_av_'+u.id,u.avatar);}catch(e){}
         u.avatar='__local__'+u.id; // marker so we know to load from localStorage
       }
     });
@@ -539,8 +539,11 @@ function restoreLocalPhotos(d){
   // Restore base64 photos from localStorage after loading from Firebase
   if(d.users){
     d.users.forEach(u=>{
-      if(u.avatar==='__local__'+u.id) u.avatar=getLocal('hn_av'+u.id);
-      else if(u.avatar&&u.avatar.startsWith('data:')) storeLocal('hn_av'+u.id,u.avatar);
+      if(u.avatar&&u.avatar.startsWith('__local__')){
+        u.avatar=localStorage.getItem('hn_av_'+u.id)||'';
+      } else if(u.avatar&&u.avatar.startsWith('data:')){
+        try{localStorage.setItem('hn_av_'+u.id,u.avatar);}catch(e){}
+      }
     });
   }
   if(d.about){
@@ -660,9 +663,9 @@ function sGet(){
 }
 function trySession(){
   if(sGet()){
-    // Restore avatar from localStorage if it was stripped
+    // Restore avatar from localStorage if stripped
     if(S.user&&(!S.user.avatar||S.user.avatar.startsWith('__local__'))){
-      S.user.avatar=getLocal('hn_av'+S.user.id)||'';
+      S.user.avatar=localStorage.getItem('hn_av_'+S.user.id)||'';
     }
     ge('loginPage').style.display='none';ge('app').style.display='block';initApp(true);
   }
@@ -886,21 +889,20 @@ function rProfile(){
 
 function changeAvatar(){
   const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
-  inp.onchange=async e=>{
+  inp.onchange=e=>{
     const file=e.target.files[0];if(!file)return;
-    toast('info','fa-circle-notch fa-spin','Uploading photo...');
-    const u=S.user;
-    const safeName=(u.username||'user').replace(/[^a-zA-Z0-9]/g,'_');
-    const ext=file.name.split('.').pop()||'jpg';
-    const path=`images/avatar_${safeName}.${ext}`;
-    const b64=await fileToBase64(file);
-    const url=await uploadToGitHub(path,b64,true);
-    if(url){
-      u.avatar=url;
-      const du=DB.users.find(x=>x.id===u.id);if(du)du.avatar=url;
+    const r=new FileReader();
+    r.onload=ev=>{
+      const u=S.user;
+      const b64=ev.target.result;
+      u.avatar=b64;
+      const du=DB.users.find(x=>x.id===u.id);if(du)du.avatar=b64;
+      // Store avatar in localStorage with user-specific key
+      try{localStorage.setItem('hn_av_'+u.id,b64);}catch(e){}
       saveDB();sSet(u);renderHdr();rProfile();
       toast('success','fa-check','Photo updated! ✅');
-    }
+    };
+    r.readAsDataURL(file);
   };inp.click();
 }
 
@@ -1065,15 +1067,14 @@ function setGHToken(){
   const t=ge('ghTokenIn')?.value.trim();
   if(!t||!t.startsWith('ghp_')){toast('error','fa-xmark','Invalid token! Must start with ghp_');return;}
   // Store token in sessionStorage (not saved to Firebase for security)
-  sessionStorage.setItem('hn_ght',t);
-  // Update GITHUB_TOKEN variable
+  localStorage.setItem('hn_ght',t);
   window.GITHUB_TOKEN=t;
   toast('success','fa-check','GitHub token set! You can now upload files.');
   rAdmin();
 }
 
 // Load token from session on startup
-(function(){const t=sessionStorage.getItem('hn_ght');if(t)window.GITHUB_TOKEN=t;})();
+(function(){const t=localStorage.getItem('hn_ght');if(t)window.GITHUB_TOKEN=t;})();
 
 function rAdmin(){
   if(S.user?.role!=='admin'){toast('error','fa-lock','Admin only!');nav('home');return;}
@@ -1094,7 +1095,7 @@ function rAdmin(){
       </div>
       ${tokenSet?
         `<p style="font-size:12px;color:var(--t2)">Files (photos & games) will upload to GitHub automatically.</p>
-         <button class="btn btn-xs btn-outline" style="margin-top:8px" onclick="window.GITHUB_TOKEN='YOUR_GITHUB_TOKEN';sessionStorage.removeItem('hn_ght');rAdmin()">Change Token</button>`:
+         <button class="btn btn-xs btn-outline" style="margin-top:8px" onclick="window.GITHUB_TOKEN='YOUR_GITHUB_TOKEN';localStorage.removeItem('hn_ght');rAdmin()">Change Token</button>`:
         `<p style="font-size:12px;color:var(--t2);margin-bottom:10px">Paste your GitHub Personal Access Token to enable photo & game file uploads.</p>
          <div class="flex gap8 wrap">
            <input id="ghTokenIn" class="fi" style="flex:1;min-width:200px;font-family:monospace;font-size:12px" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"/>

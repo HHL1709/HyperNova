@@ -848,7 +848,6 @@ function rProfile(){
   const fresh=DB.users.find(x=>x.id===S.user?.id);
   if(fresh) S.user=fresh;
   const el=ge('pc'),u=S.user,isA=u?.role==='admin';
-  const tokenOk=window.GITHUB_TOKEN&&window.GITHUB_TOKEN!=='YOUR_GITHUB_TOKEN';
   const xpN=u.level*100,xpP=Math.min(100,Math.round(((u.xp||0)%xpN)/xpN*100));
   const allB=[
     {id:'first_login',icon:'fa-right-to-bracket',label:'First Login',col:'var(--cyan)'},
@@ -898,31 +897,7 @@ function rProfile(){
       </div>`:''}
       <button class="btn btn-cyan btn-sm" onclick="saveProfile()"><i class="fa-solid fa-check"></i> SAVE CHANGES</button>
     </div>
-
-    <!-- GitHub Token Section for ALL users -->
-    <div class="card mb16" style="border-color:${tokenOk?'rgba(0,255,136,.3)':'rgba(255,230,0,.25)'}">
-      <div class="stitle mb10">
-        <i class="fa-brands fa-github" style="color:${tokenOk?'var(--green)':'var(--yellow)'}"></i>
-        UPLOAD TOKEN
-        ${tokenOk?'<span style="background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.3);border-radius:4px;padding:2px 8px;font-size:9px;color:var(--green);font-family:var(--fh)">✅ ACTIVE</span>':'<span style="background:rgba(255,230,0,.15);border:1px solid rgba(255,230,0,.3);border-radius:4px;padding:2px 8px;font-size:9px;color:var(--yellow);font-family:var(--fh)">NOT SET</span>'}
-      </div>
-      <p style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.6">
-        ${tokenOk?
-          'Your upload token is active. Photos will be saved permanently across all devices.':
-          'Set your GitHub token to upload profile photos that work on all devices.'}
-      </p>
-      ${tokenOk?
-        `<div class="flex gap8 aic wrap">
-          <span style="font-size:11px;color:var(--green)"><i class="fa-solid fa-check"></i> Token saved permanently</span>
-          <button class="btn btn-xs btn-outline" onclick="clearGHToken()">Remove Token</button>
-        </div>`:
-        `<div class="flex gap8 wrap">
-          <input id="profileGhToken" class="fi" style="flex:1;min-width:180px;font-family:monospace;font-size:12px" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"/>
-          <button class="btn btn-sm btn-cyan" onclick="setGHToken(true)"><i class="fa-brands fa-github"></i> SAVE TOKEN</button>
-        </div>
-        <div style="margin-top:8px;font-size:11px;color:var(--t3)">Get token: <strong style="color:var(--cyan)">github.com/settings/tokens</strong> → New classic token → <strong>repo</strong> scope</div>`
-      }
-    </div>`;
+`;
 }
 
 function changeAvatar(){
@@ -930,8 +905,7 @@ function changeAvatar(){
   inp.onchange=async e=>{
     const file=e.target.files[0];if(!file)return;
     const u=S.user;
-    const tokenOk=window.GITHUB_TOKEN&&window.GITHUB_TOKEN!=='YOUR_GITHUB_TOKEN';
-
+  
     if(tokenOk){
       // Upload to GitHub — works on ALL devices
       toast('info','fa-circle-notch fa-spin','Uploading photo...');
@@ -1119,18 +1093,16 @@ function rGameDetail(gid){
 }
 
 // ═══ ADMIN ═══
-function setGHToken(fromProfile){
-  const inputId=fromProfile?'profileGhToken':'ghTokenIn';
-  const t=ge(inputId)?.value.trim();
+function setGHToken(){
+  const t=ge('ghTokenIn')?.value.trim();
   if(!t||!t.startsWith('ghp_')){toast('error','fa-xmark','Invalid token! Must start with ghp_');return;}
   // Save to Firebase permanently — works on ALL devices
   if(!DB.settings)DB.settings={};
   DB.settings.githubToken=t;
   window.GITHUB_TOKEN=t;
   saveDB();
-  toast('success','fa-check','Token saved to Firebase! ✅ Works on all devices now.');
-  if(fromProfile) rProfile();
-  else rAdmin();
+  toast('success','fa-check','Token saved permanently! ✅ All devices ready.');
+  rAdmin();
 }
 
 function clearGHToken(){

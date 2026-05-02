@@ -432,7 +432,7 @@ const GITHUB_RAW = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_RE
 const GITHUB_API = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents`;
 // Get your GitHub Personal Access Token from: github.com/settings/tokens
 // Required scopes: repo (full control)
-window.GITHUB_TOKEN = localStorage.getItem('hn_ght') || 'YOUR_GITHUB_TOKEN';
+window.GITHUB_TOKEN = 'YOUR_GITHUB_TOKEN'; // Loaded from Firebase in applyDB
 const SK='hn_s',PK='hn_p',DK='hn_d';
 const S={user:null,page:'home',gid:null};
 let _fbr=false,_ref=null,_own=false;
@@ -446,7 +446,8 @@ const DB={
   categories:['Action','Adventure','Puzzle','Racing','Sports','Strategy','Arcade','RPG'],
   announcements:[],
   about:{text:'Welcome to HyperNova — the next-gen gaming portal!\n\nA premium gaming portal where players discover and experience the best browser-based games. We curate high-quality titles across 8 categories — from action to puzzles. Our mission is to deliver an exceptional gaming experience for everyone.\n\nFeatures:\n• 50+ Games across multiple categories\n• Instant Play — no downloads needed\n• Safe & Secure — content ratings enforced\n• Community Rated — genuine reviews from real players\n• Admin Control — full content management\n• Fully Responsive — mobile, tablet, laptop & desktop',photo:'',devPhoto:'',devName:'Harsh Lalka',devRole:'Founder & Lead Developer',devBio:'A passionate developer who built HyperNova from the ground up to deliver the best browser gaming experience.'},
-  contact:{instagram:'',youtube:'',github:'',linkedin:'',gmail:''}
+  contact:{instagram:'',youtube:'',github:'',linkedin:'',gmail:''},
+  settings:{githubToken:''}
 };
 
 // ═══ FIREBASE ═══
@@ -493,6 +494,13 @@ function applyDB(d){
   if(d.announcements)DB.announcements=d.announcements;
   if(d.about){DB.about={devPhoto:'',devName:'Harsh Lalka',devRole:'Founder & Lead Developer',devBio:'',...d.about};}
   if(d.contact)DB.contact=d.contact;
+  if(d.settings){
+    DB.settings=d.settings;
+    // Restore GitHub token from Firebase
+    if(d.settings.githubToken&&d.settings.githubToken!==''){
+      window.GITHUB_TOKEN=d.settings.githubToken;
+    }
+  }
   // Sync current user's data
   if(S.user){const fresh=DB.users.find(x=>x.id===S.user.id);if(fresh){S.user=fresh;sSet(fresh);renderHdr();}}
   updBadge();
@@ -505,7 +513,7 @@ function getLocal(key){try{return localStorage.getItem(key)||'';}catch(e){return
 function snap(forFirebase){
   const c=JSON.parse(JSON.stringify({
     users:DB.users,games:DB.games,categories:DB.categories,
-    announcements:DB.announcements,about:DB.about,contact:DB.contact
+    announcements:DB.announcements,about:DB.about,contact:DB.contact,settings:DB.settings
   }));
   // Game HTML files — always store locally
   c.games.forEach(g=>{
@@ -642,8 +650,12 @@ function loadLoc(){
     const r=localStorage.getItem('hn_db');
     if(r){
       const d=JSON.parse(r);
-      restoreLocalPhotos(d); // restore before applyDB
+      restoreLocalPhotos(d);
       applyDB(d);
+      // Load GitHub token from local cache (Firebase will override on connect)
+      if(d.settings&&d.settings.githubToken&&d.settings.githubToken!==''){
+        window.GITHUB_TOKEN=d.settings.githubToken;
+      }
     }
   }catch(e){}
 }
@@ -836,6 +848,7 @@ function rProfile(){
   const fresh=DB.users.find(x=>x.id===S.user?.id);
   if(fresh) S.user=fresh;
   const el=ge('pc'),u=S.user,isA=u?.role==='admin';
+  const tokenOk=window.GITHUB_TOKEN&&window.GITHUB_TOKEN!=='YOUR_GITHUB_TOKEN';
   const xpN=u.level*100,xpP=Math.min(100,Math.round(((u.xp||0)%xpN)/xpN*100));
   const allB=[
     {id:'first_login',icon:'fa-right-to-bracket',label:'First Login',col:'var(--cyan)'},
@@ -884,25 +897,68 @@ function rProfile(){
         <div class="field"><label>CURRENT PASSWORD (required)</label><input id="pCur" class="fi" type="password" placeholder="Confirm current pass"/></div>
       </div>`:''}
       <button class="btn btn-cyan btn-sm" onclick="saveProfile()"><i class="fa-solid fa-check"></i> SAVE CHANGES</button>
+    </div>
+
+    <!-- GitHub Token Section for ALL users -->
+    <div class="card mb16" style="border-color:${tokenOk?'rgba(0,255,136,.3)':'rgba(255,230,0,.25)'}">
+      <div class="stitle mb10">
+        <i class="fa-brands fa-github" style="color:${tokenOk?'var(--green)':'var(--yellow)'}"></i>
+        UPLOAD TOKEN
+        ${tokenOk?'<span style="background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.3);border-radius:4px;padding:2px 8px;font-size:9px;color:var(--green);font-family:var(--fh)">✅ ACTIVE</span>':'<span style="background:rgba(255,230,0,.15);border:1px solid rgba(255,230,0,.3);border-radius:4px;padding:2px 8px;font-size:9px;color:var(--yellow);font-family:var(--fh)">NOT SET</span>'}
+      </div>
+      <p style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.6">
+        ${tokenOk?
+          'Your upload token is active. Photos will be saved permanently across all devices.':
+          'Set your GitHub token to upload profile photos that work on all devices.'}
+      </p>
+      ${tokenOk?
+        `<div class="flex gap8 aic wrap">
+          <span style="font-size:11px;color:var(--green)"><i class="fa-solid fa-check"></i> Token saved permanently</span>
+          <button class="btn btn-xs btn-outline" onclick="clearGHToken()">Remove Token</button>
+        </div>`:
+        `<div class="flex gap8 wrap">
+          <input id="profileGhToken" class="fi" style="flex:1;min-width:180px;font-family:monospace;font-size:12px" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"/>
+          <button class="btn btn-sm btn-cyan" onclick="setGHToken(true)"><i class="fa-brands fa-github"></i> SAVE TOKEN</button>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--t3)">Get token: <strong style="color:var(--cyan)">github.com/settings/tokens</strong> → New classic token → <strong>repo</strong> scope</div>`
+      }
     </div>`;
 }
 
 function changeAvatar(){
   const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
-  inp.onchange=e=>{
+  inp.onchange=async e=>{
     const file=e.target.files[0];if(!file)return;
-    const r=new FileReader();
-    r.onload=ev=>{
-      const u=S.user;
-      const b64=ev.target.result;
-      u.avatar=b64;
-      const du=DB.users.find(x=>x.id===u.id);if(du)du.avatar=b64;
-      // Store avatar in localStorage with user-specific key
-      try{localStorage.setItem('hn_av_'+u.id,b64);}catch(e){}
-      saveDB();sSet(u);renderHdr();rProfile();
-      toast('success','fa-check','Photo updated! ✅');
-    };
-    r.readAsDataURL(file);
+    const u=S.user;
+    const tokenOk=window.GITHUB_TOKEN&&window.GITHUB_TOKEN!=='YOUR_GITHUB_TOKEN';
+
+    if(tokenOk){
+      // Upload to GitHub — works on ALL devices
+      toast('info','fa-circle-notch fa-spin','Uploading photo...');
+      const safeName=(u.username||'user').replace(/[^a-zA-Z0-9]/g,'_').toLowerCase();
+      const ext=file.name.split('.').pop()||'jpg';
+      const path=`images/avatar_${safeName}.${ext}`;
+      const b64=await fileToBase64(file);
+      const url=await uploadToGitHub(path,b64,true);
+      if(url){
+        u.avatar=url;
+        const du=DB.users.find(x=>x.id===u.id);if(du)du.avatar=url;
+        saveDB();sSet(u);renderHdr();rProfile();
+        toast('success','fa-check','Photo updated! Visible on all devices ✅');
+      }
+    } else {
+      // No token — save to localStorage (this device only)
+      const r=new FileReader();
+      r.onload=ev=>{
+        const b64=ev.target.result;
+        u.avatar=b64;
+        const du=DB.users.find(x=>x.id===u.id);if(du)du.avatar=b64;
+        try{localStorage.setItem('hn_av_'+u.id,b64);}catch(e){}
+        saveDB();sSet(u);renderHdr();rProfile();
+        toast('warn','fa-triangle-exclamation','Photo saved on this device only. Set GitHub token for all devices.');
+      };
+      r.readAsDataURL(file);
+    }
   };inp.click();
 }
 
@@ -1063,18 +1119,28 @@ function rGameDetail(gid){
 }
 
 // ═══ ADMIN ═══
-function setGHToken(){
-  const t=ge('ghTokenIn')?.value.trim();
+function setGHToken(fromProfile){
+  const inputId=fromProfile?'profileGhToken':'ghTokenIn';
+  const t=ge(inputId)?.value.trim();
   if(!t||!t.startsWith('ghp_')){toast('error','fa-xmark','Invalid token! Must start with ghp_');return;}
-  // Store token in sessionStorage (not saved to Firebase for security)
-  localStorage.setItem('hn_ght',t);
+  // Save to Firebase permanently — works on ALL devices
+  if(!DB.settings)DB.settings={};
+  DB.settings.githubToken=t;
   window.GITHUB_TOKEN=t;
-  toast('success','fa-check','GitHub token set! You can now upload files.');
-  rAdmin();
+  saveDB();
+  toast('success','fa-check','Token saved to Firebase! ✅ Works on all devices now.');
+  if(fromProfile) rProfile();
+  else rAdmin();
 }
 
-// Load token from session on startup
-(function(){const t=localStorage.getItem('hn_ght');if(t)window.GITHUB_TOKEN=t;})();
+function clearGHToken(){
+  if(!DB.settings)DB.settings={};
+  DB.settings.githubToken='';
+  window.GITHUB_TOKEN='YOUR_GITHUB_TOKEN';
+  saveDB();
+  toast('info','fa-trash','GitHub token removed.');
+  rAdmin();
+}
 
 function rAdmin(){
   if(S.user?.role!=='admin'){toast('error','fa-lock','Admin only!');nav('home');return;}
@@ -1095,7 +1161,7 @@ function rAdmin(){
       </div>
       ${tokenSet?
         `<p style="font-size:12px;color:var(--t2)">Files (photos & games) will upload to GitHub automatically.</p>
-         <button class="btn btn-xs btn-outline" style="margin-top:8px" onclick="window.GITHUB_TOKEN='YOUR_GITHUB_TOKEN';localStorage.removeItem('hn_ght');rAdmin()">Change Token</button>`:
+         <button class="btn btn-xs btn-outline" style="margin-top:8px" onclick="clearGHToken()">Change Token</button>`:
         `<p style="font-size:12px;color:var(--t2);margin-bottom:10px">Paste your GitHub Personal Access Token to enable photo & game file uploads.</p>
          <div class="flex gap8 wrap">
            <input id="ghTokenIn" class="fi" style="flex:1;min-width:200px;font-family:monospace;font-size:12px" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"/>

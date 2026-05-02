@@ -905,9 +905,10 @@ function changeAvatar(){
   inp.onchange=async e=>{
     const file=e.target.files[0];if(!file)return;
     const u=S.user;
-  
+    const tokenOk=window.GITHUB_TOKEN&&window.GITHUB_TOKEN!=='YOUR_GITHUB_TOKEN';
+
     if(tokenOk){
-      // Upload to GitHub — works on ALL devices
+      // Upload to GitHub — permanent, works on ALL devices
       toast('info','fa-circle-notch fa-spin','Uploading photo...');
       const safeName=(u.username||'user').replace(/[^a-zA-Z0-9]/g,'_').toLowerCase();
       const ext=file.name.split('.').pop()||'jpg';
@@ -918,18 +919,19 @@ function changeAvatar(){
         u.avatar=url;
         const du=DB.users.find(x=>x.id===u.id);if(du)du.avatar=url;
         saveDB();sSet(u);renderHdr();rProfile();
-        toast('success','fa-check','Photo updated! Visible on all devices ✅');
+        toast('success','fa-check','Photo updated! ✅ Visible on all devices.');
       }
     } else {
-      // No token — save to localStorage (this device only)
+      // No GitHub token — save base64 directly to Firebase
+      // Works on all devices but large images may be slow
+      toast('info','fa-circle-notch fa-spin','Saving photo...');
       const r=new FileReader();
       r.onload=ev=>{
         const b64=ev.target.result;
         u.avatar=b64;
         const du=DB.users.find(x=>x.id===u.id);if(du)du.avatar=b64;
-        try{localStorage.setItem('hn_av_'+u.id,b64);}catch(e){}
         saveDB();sSet(u);renderHdr();rProfile();
-        toast('warn','fa-triangle-exclamation','Photo saved on this device only. Set GitHub token for all devices.');
+        toast('success','fa-check','Photo saved! ✅');
       };
       r.readAsDataURL(file);
     }

@@ -387,7 +387,7 @@ textarea.fi{resize:vertical;min-height:70px}
     <span class="ftitle" id="ftitle">GAME</span>
     <button class="fclose" onclick="closeGame()"><i class="fa-solid fa-xmark"></i> EXIT</button>
   </div>
-  <iframe id="gif" allowfullscreen sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock"></iframe>
+  <iframe id="gif" allowfullscreen allow="autoplay" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-modals allow-top-navigation-by-user-activation"></iframe>
 </div>
 
 <!-- NOTIF -->
@@ -606,7 +606,10 @@ async function uploadToGitHub(path, content, isBase64){
 
     if(res.ok){
       const d = await res.json();
-      return d.content.download_url || `${GITHUB_RAW}/${path}`;
+      // Convert raw URL to GitHub Pages URL (raw.githubusercontent.com doesn't work in iframe)
+      const rawUrl = d.content.download_url || `${GITHUB_RAW}/${path}`;
+      const pagesUrl = `https://${GITHUB_USER}.github.io/${GITHUB_REPO}/${path}`;
+      return pagesUrl;
     }else{
       const err = await res.json();
       toast('error','fa-xmark','Upload failed: '+err.message);
@@ -1578,19 +1581,21 @@ function playGame(id){
   // Single save for all changes
   const du=DB.users.find(x=>x.id===S.user.id);if(du)Object.assign(du,S.user);
   saveDB();
-  // Launch game — use GitHub URL if available, else local HTML, else game URL
+  // Launch game
   let src=null;
   if(g.gameUrl&&g.gameUrl.startsWith('http')){
-    src=g.gameUrl; // GitHub hosted game
+    // GitHub Pages URL — works perfectly in iframe
+    src=g.gameUrl;
+  } else if(g.htmlContent){
+    // Uploaded HTML file — create blob URL
+    const blob=new Blob([g.htmlContent],{type:'text/html'});
+    src=URL.createObjectURL(blob);
+    window._lastObjUrl=src;
+  } else if(g.url&&g.url.startsWith('http')){
+    // External game URL
+    src=g.url;
   } else {
-    const html=g.htmlContent||localStorage.getItem('hn_h'+g.id);
-    if(html){
-      const objUrl=URL.createObjectURL(new Blob([html],{type:'text/html'}));
-      window._lastObjUrl=objUrl;
-      src=objUrl;
-    } else {
-      src=g.url||null;
-    }
+    toast('error','fa-xmark','No game file found!');return;
   }
   if(!src){toast('error','fa-xmark','No game file uploaded!');return;}
   ge('ftitle').textContent=g.title.toUpperCase();

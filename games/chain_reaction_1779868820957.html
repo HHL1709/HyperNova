@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>CHAIN REACTION</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;touch-action:none;user-select:none;font-family:'Courier New',monospace}
+canvas{display:block;margin:0 auto}
+#overlay{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.9)}
+.panel{background:#030008;border:2px solid #ff6600;border-radius:14px;padding:22px 28px;text-align:center;max-width:300px;width:90%;box-shadow:0 0 40px rgba(255,100,0,.25)}
+.ptitle{font-size:24px;font-weight:900;letter-spacing:3px;background:linear-gradient(135deg,#ff6600,#ffcc00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:3px}
+.psub{font-size:9px;color:#7a3300;letter-spacing:3px;margin-bottom:12px}
+.pinfo{font-size:11px;color:#cc7733;line-height:1.9;margin-bottom:12px}
+.pbtn{display:block;width:100%;padding:12px;margin-top:8px;border:none;border-radius:8px;font-family:'Courier New',monospace;font-size:13px;font-weight:700;letter-spacing:2px;cursor:pointer}
+.pmain{background:linear-gradient(135deg,#ff6600,#ffaa00);color:#000}
+.pmain:active{transform:scale(.97)}
+.psec{background:transparent;border:2px solid rgba(255,100,0,.4);color:#ff6600}
+.srow{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,100,0,.1);font-size:12px}
+.srow span:first-child{color:#7a3300}
+.srow span:last-child{color:#ff6600;font-weight:700}
+#sb{position:fixed;top:8px;right:8px;z-index:30;background:rgba(0,0,0,.6);border:1px solid rgba(255,100,0,.2);color:#7a3300;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="overlay">
+
+  <!-- START -->
+  <div class="panel" id="pStart">
+    <div class="ptitle">CHAIN REACTION</div>
+    <div class="psub">ATOMIC BLAST</div>
+    <div style="font-size:42px;margin:8px 0">⚛️</div>
+    <div class="pinfo">
+      Tap atoms to trigger chain reactions!<br>
+      💥 Blast ALL atoms to clear the level!<br>
+      🛡️ Shield atoms block your chain!<br>
+      🎯 Use moves wisely — strategy wins!<br>
+      📈 Levels get harder gradually!
+    </div>
+    <button class="pbtn pmain" id="bStart">🆕 NEW GAME</button>
+    <button class="pbtn psec" id="bContinue" style="display:none">▶ CONTINUE</button>
+  </div>
+
+  <!-- LEVEL START -->
+  <div class="panel" id="pLevel" style="display:none">
+    <div class="ptitle" id="lvlTitle">LEVEL 1</div>
+    <div style="font-size:34px;margin:8px 0" id="lvlIcon">😊</div>
+    <div class="srow"><span>DIFFICULTY</span><span id="lvlDiff">EASY</span></div>
+    <div class="srow"><span>ATOMS</span><span id="lvlAtoms">0</span></div>
+    <div class="srow"><span>BLOCKERS</span><span id="lvlBlock">0</span></div>
+    <div class="srow"><span>MOVES</span><span id="lvlMoves">0</span></div>
+    <div class="pinfo" style="margin-top:10px;margin-bottom:0;font-size:10px;color:#7a3300">Blast ALL atoms using given moves!</div>
+    <button class="pbtn pmain" id="bLevelPlay">▶ START LEVEL</button>
+    <button class="pbtn psec" id="bLevelMenu">🏠 MENU</button>
+  </div>
+
+  <!-- WIN -->
+  <div class="panel" id="pWin" style="display:none">
+    <div class="ptitle">LEVEL CLEAR!</div>
+    <div style="font-size:34px;margin:6px 0">🏆</div>
+    <div class="srow"><span>LEVEL</span><span id="wL">1</span></div>
+    <div class="srow"><span>SCORE</span><span id="wS">0</span></div>
+    <div class="srow"><span>MOVES USED</span><span id="wM">0</span></div>
+    <div class="srow"><span>MOVES LEFT</span><span id="wML">0</span></div>
+    <div class="srow"><span>BEST SCORE</span><span id="wB">0</span></div>
+    <button class="pbtn pmain" id="bNext">▶ NEXT LEVEL</button>
+    <button class="pbtn psec" id="bMenuW">🏠 MENU</button>
+  </div>
+
+  <!-- LOSE -->
+  <div class="panel" id="pLose" style="display:none">
+    <div class="ptitle">OUT OF MOVES!</div>
+    <div style="font-size:34px;margin:6px 0">💨</div>
+    <div class="srow"><span>LEVEL</span><span id="lL">1</span></div>
+    <div class="srow"><span>ATOMS LEFT</span><span id="lA">0</span></div>
+    <div class="srow"><span>BEST SCORE</span><span id="lB">0</span></div>
+    <button class="pbtn pmain" id="bRetry">🔄 RETRY</button>
+    <button class="pbtn psec" id="bMenuL">🏠 MENU</button>
+  </div>
+
+</div>
+<button id="sb">🔊</button>
+<script>
+'use strict';
+const cv=document.getElementById('c'),ct=cv.getContext('2d');
+let W=0,H=0;
+function resize(){W=cv.width=window.innerWidth;H=cv.height=window.innerHeight;}
+resize();window.addEventListener('resize',resize);
+
+// ── AUDIO ──
+let AC=null,sndOn=true,bgt=null;
+function gac(){if(!AC)try{AC=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}if(AC&&AC.state==='suspended')AC.resume();return AC;}
+function tn(f,d,t,v,f2){t=t||'sine';v=v||0.1;if(!sndOn)return;const a=gac();if(!a)return;try{const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.type=t;o.frequency.value=f;if(f2)o.frequency.exponentialRampToValueAtTime(f2,a.currentTime+d);g.gain.setValueAtTime(v,a.currentTime);g.gain.linearRampToValueAtTime(0,a.currentTime+d);o.start();o.stop(a.currentTime+d+0.02);}catch(e){}}
+function nz(d,v){v=v||0.25;if(!sndOn)return;const a=gac();if(!a)return;try{const b=a.createBuffer(1,a.sampleRate*d,a.sampleRate),dt=b.getChannelData(0);for(let i=0;i<dt.length;i++)dt[i]=(Math.random()*2-1)*Math.pow(1-i/dt.length,2);const s=a.createBufferSource(),g=a.createGain();s.buffer=b;s.connect(g);g.connect(a.destination);g.gain.value=v;s.start();}catch(e){}}
+
+function startBG(){stopBG();if(!sndOn)return;const m=[110,130,146,130,110,98,110,130];let i=0;function nx(){if(!sndOn)return;tn(m[i%8]*0.5,0.25,'sine',0.025);i++;bgt=setTimeout(nx,380);}nx();}
+function stopBG(){clearTimeout(bgt);bgt=null;}
+
+const SFX={
+  tap:   ()=>tn(440,0.06,'sine',0.1,880),
+  boom:  ()=>{nz(0.12,0.3);tn(200,0.1,'sawtooth',0.15,80);},
+  chain: ()=>tn(880,0.07,'sine',0.1,1200),
+  mega:  ()=>{[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>tn(f,0.12,'square',0.09),i*60));},
+  win:   ()=>{[523,659,784,1047].forEach((f,i)=>setTimeout(()=>tn(f,0.12,'square',0.08),i*80));},
+  fail:  ()=>{[300,250,200].forEach((f,i)=>setTimeout(()=>tn(f,0.15,'sawtooth',0.09),i*100));},
+  block: ()=>tn(150,0.1,'sawtooth',0.1,120),
+  lastmove:()=>{tn(600,0.1,'square',0.1);setTimeout(()=>tn(400,0.12,'square',0.1),100);},
+};
+document.getElementById('sb').onclick=()=>{sndOn=!sndOn;document.getElementById('sb').textContent=sndOn?'🔊':'🔇';if(sndOn&&state==='play')startBG();else stopBG();};
+
+// ── LEVEL CONFIGS (Candy Crush style progression) ──
+// Each level: {atoms, blockers, moves, chainRadius multiplier, spacing}
+function getLevelConfig(lv){
+  // chainMult controls explosion radius = atom.size * chainMult
+  // spacing = min distance between atoms (smaller = atoms closer = easier chains)
+  // Key: chainMult must be HIGH enough relative to spacing so chains actually work!
+  if(lv===1) return{atoms:10,blockers:0,moves:3,chainMult:5.5,spacing:55,diff:'EASY',icon:'😊',color:'#00ff88'};
+  if(lv===2) return{atoms:12,blockers:0,moves:3,chainMult:5.0,spacing:58,diff:'EASY',icon:'😊',color:'#00ff88'};
+  if(lv===3) return{atoms:14,blockers:1,moves:3,chainMult:4.8,spacing:60,diff:'EASY',icon:'😊',color:'#00ff88'};
+  if(lv===4) return{atoms:16,blockers:1,moves:3,chainMult:4.5,spacing:62,diff:'EASY',icon:'😊',color:'#00ff88'};
+  if(lv===5) return{atoms:16,blockers:2,moves:3,chainMult:4.2,spacing:65,diff:'MEDIUM',icon:'😐',color:'#ffe600'};
+  if(lv===6) return{atoms:18,blockers:2,moves:3,chainMult:4.0,spacing:68,diff:'MEDIUM',icon:'😐',color:'#ffe600'};
+  if(lv===7) return{atoms:18,blockers:3,moves:3,chainMult:3.8,spacing:70,diff:'MEDIUM',icon:'😐',color:'#ffe600'};
+  if(lv===8) return{atoms:20,blockers:3,moves:3,chainMult:3.5,spacing:72,diff:'MEDIUM',icon:'😐',color:'#ffe600'};
+  if(lv===9) return{atoms:20,blockers:4,moves:3,chainMult:3.3,spacing:74,diff:'HARD',icon:'😤',color:'#ff8800'};
+  if(lv===10)return{atoms:22,blockers:4,moves:3,chainMult:3.1,spacing:76,diff:'HARD',icon:'😤',color:'#ff8800'};
+  if(lv<=13) return{atoms:22,blockers:5,moves:3,chainMult:2.9,spacing:78,diff:'HARD',icon:'😤',color:'#ff8800'};
+  if(lv<=16) return{atoms:24,blockers:6,moves:3,chainMult:2.7,spacing:80,diff:'EXPERT',icon:'😰',color:'#ff4400'};
+  if(lv<=20) return{atoms:26,blockers:7,moves:3,chainMult:2.5,spacing:82,diff:'EXPERT',icon:'😰',color:'#ff4400'};
+  if(lv<=25) return{atoms:28,blockers:8,moves:3,chainMult:2.3,spacing:84,diff:'EXTREME',icon:'💀',color:'#ff006e'};
+  return       {atoms:30,blockers:10,moves:3,chainMult:2.1,spacing:86,diff:'EXTREME',icon:'💀',color:'#ff006e'};
+}
+
+// ── ATOM TYPES ──
+const ATOM_TYPES=[
+  {col:'#ff006e',glow:'255,0,110',size:14},
+  {col:'#00f5ff',glow:'0,245,255',size:13},
+  {col:'#ffe600',glow:'255,230,0',size:15},
+  {col:'#00ff88',glow:'0,255,136',size:12},
+  {col:'#cc00ff',glow:'200,0,255',size:16},
+  {col:'#ff6600',glow:'255,100,0',size:14},
+];
+
+// ── GAME STATE ──
+let state='menu';
+let level=1;
+let score=0,best=0;
+// Firebase config
+const FB_URL='https://hypernova-games-default-rtdb.asia-southeast1.firebasedatabase.app';
+let fbUid=null; // set by parent HyperNova website via postMessage
+let movesLeft=0,movesUsed=0,totalMoves=0;
+let atoms=[],parts=[],frame=0;
+let chainActive=false,chainCount=0,totalChain=0;
+let flashMsg={text:'',col:'#ff6600',t:0};
+let pendingExplosions=0;
+let resultShown=false;
+
+function showFlash(t,c){flashMsg={text:t,col:c||'#ff6600',t:90};}
+
+// ── SPAWN ──
+function spawnLevel(lv){
+  const cfg=getLevelConfig(lv);
+  atoms=[];parts=[];frame=0;chainActive=false;chainCount=0;totalChain=0;
+  movesLeft=cfg.moves;movesUsed=0;totalMoves=cfg.moves;
+  pendingExplosions=0;resultShown=false;
+  flashMsg={text:'',col:'#ff6600',t:0};
+
+  const margin=44;
+  const topPad=70;
+
+  // Spawn normal atoms - ensure they're close enough to chain
+  const minChainDist=cfg.chainMult*12; // atoms must be within chain range of at least one other
+  for(let i=0;i<cfg.atoms;i++){
+    const type=ATOM_TYPES[Math.floor(Math.random()*ATOM_TYPES.length)];
+    const chainR=type.size*cfg.chainMult;
+    let x,y,tries=0,ok=false;
+    while(!ok&&tries<120){
+      if(atoms.length>0&&tries<80){
+        // Try spawning near an existing atom for better chains
+        const ref=atoms[Math.floor(Math.random()*Math.min(atoms.length,5))];
+        const ang=Math.random()*Math.PI*2;
+        const dist=cfg.spacing*0.6+Math.random()*cfg.spacing*0.5;
+        x=ref.x+Math.cos(ang)*dist;
+        y=ref.y+Math.sin(ang)*dist;
+      } else {
+        x=margin+Math.random()*(W-margin*2);
+        y=topPad+margin+Math.random()*(H-topPad-margin*2-60);
+      }
+      // Keep in bounds
+      x=Math.max(margin,Math.min(W-margin,x));
+      y=Math.max(topPad+margin,Math.min(H-margin-60,y));
+      // Not too close to other atoms
+      ok=atoms.every(a=>Math.sqrt((a.x-x)**2+(a.y-y)**2)>cfg.spacing*0.7);
+      tries++;
+    }
+    atoms.push({x,y,r:type.size,col:type.col,glow:type.glow,chainR,
+      alive:true,exploded:false,blocker:false,
+      pulseOff:Math.random()*Math.PI*2,explodeAnim:0,
+      orbs:Array.from({length:2+Math.floor(Math.random()*2)},()=>({
+        angle:Math.random()*Math.PI*2,
+        spd:(Math.random()<0.5?1:-1)*(0.04+Math.random()*0.03),
+        dist:type.size*1.9+Math.random()*6,
+      }))
+    });
+  }
+
+  // Spawn blockers
+  for(let b=0;b<cfg.blockers;b++){
+    let x,y,tries=0,ok=false;
+    while(!ok&&tries<80){
+      x=margin+Math.random()*(W-margin*2);
+      y=topPad+margin+Math.random()*(H-topPad-margin*2-60);
+      ok=atoms.every(a=>Math.sqrt((a.x-x)**2+(a.y-y)**2)>65);
+      tries++;
+    }
+    atoms.push({x,y,r:19,col:'#666',glow:'120,120,120',chainR:0,
+      alive:true,exploded:false,blocker:true,
+      pulseOff:Math.random()*Math.PI*2,explodeAnim:0,orbs:[]
+    });
+  }
+}
+
+// ── EXPLOSION ──
+function triggerAtom(idx){
+  const a=atoms[idx];
+  if(!a||!a.alive||a.exploded)return;
+  if(a.blocker){SFX.block();return;}
+
+  a.exploded=true;a.alive=false;a.explodeAnim=1;
+  chainCount++;totalChain++;
+  pendingExplosions++;
+
+  // Score: chain combo bonus
+  const combo=Math.min(chainCount,20);
+  const pts=combo*level*15;
+  score+=pts;if(score>best){best=score;saveProgress();}
+
+  SFX.boom();
+  if(chainCount>=5){SFX.chain();showFlash('🔥 CHAIN x'+chainCount+'!','#ffe600');}
+  if(chainCount>=10){SFX.mega();showFlash('💥 MEGA x'+chainCount+'!!','#ff006e');}
+
+  burst(a.x,a.y,a.col,18);
+
+  // Chain neighbors
+  atoms.forEach((nb,i)=>{
+    if(!nb.alive||nb.exploded||nb.blocker)return;
+    const dx=nb.x-a.x,dy=nb.y-a.y;
+    if(Math.sqrt(dx*dx+dy*dy)<a.chainR+nb.r*0.5){
+      setTimeout(()=>{if(state==='play')triggerAtom(i);},70+Math.random()*50);
+    }
+  });
+
+  // After delay check result
+  setTimeout(()=>{
+    pendingExplosions--;
+    if(pendingExplosions<=0)checkResult();
+  },400);
+}
+
+function checkResult(){
+  if(resultShown)return;
+  const aliveNormal=atoms.filter(a=>a.alive&&!a.blocker).length;
+  if(aliveNormal===0){
+    // ALL normal atoms blasted!
+    resultShown=true;
+    const movesLeftBonus=movesLeft*level*50;
+    score+=movesLeftBonus;
+    if(score>best){best=score;saveProgress();}
+    SFX.win();
+    showFlash('🏆 ALL BLASTED!','#00ff88');
+    setTimeout(()=>{
+      document.getElementById('wL').textContent=level;
+      document.getElementById('wS').textContent=Math.floor(score);
+      document.getElementById('wM').textContent=movesUsed;
+      document.getElementById('wML').textContent=movesLeft;
+      document.getElementById('wB').textContent=best;
+      showPanel('pWin');
+    },1200);
+  } else if(movesLeft<=0&&!resultShown){
+    resultShown=true;
+    SFX.fail();
+    showFlash('💨 NO MOVES LEFT!','#ff2200');
+    setTimeout(()=>{
+      document.getElementById('lL').textContent=level;
+      document.getElementById('lA').textContent=aliveNormal;
+      document.getElementById('lB').textContent=best;
+      showPanel('pLose');
+    },900);
+  }
+}
+
+function handleTap(x,y){
+  if(state!=='play')return;
+  if(movesLeft<=0||resultShown)return;
+  if(pendingExplosions>0)return; // wait for chain to settle
+
+  // Find tapped atom
+  let tapped=-1,bestD=Infinity;
+  atoms.forEach((a,i)=>{
+    if(!a.alive)return;
+    const d=Math.sqrt((x-a.x)**2+(y-a.y)**2);
+    if(d<a.r*2.2&&d<bestD){bestD=d;tapped=i;}
+  });
+
+  if(tapped>=0){
+    if(atoms[tapped].blocker){SFX.block();showFlash('🛡️ SHIELD! Cannot tap!','#888888');return;}
+    movesLeft--;movesUsed++;chainCount=0;
+    SFX.tap();
+    if(movesLeft===1)SFX.lastmove();
+    burst(atoms[tapped].x,atoms[tapped].y,'#ffffff',10);
+    triggerAtom(tapped);
+    // Check if out of moves after chain settles
+    setTimeout(()=>{if(movesLeft<=0&&!resultShown)checkResult();},800);
+  }
+}
+
+function burst(bx,by,col,n){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2,s=2+Math.random()*8;
+    parts.push({x:bx,y:by,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:2+Math.random()*5,col,life:1,dec:0.02+Math.random()*0.015});
+  }
+}
+
+// ── UPDATE ──
+function update(){
+  frame++;
+  if(flashMsg.t>0)flashMsg.t--;
+  atoms.forEach(a=>{
+    if(a.explodeAnim>0)a.explodeAnim=Math.max(0,a.explodeAnim-0.04);
+    a.orbs.forEach(o=>o.angle+=o.spd);
+  });
+  parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vx*=0.91;p.vy*=0.91;p.life-=p.dec;});
+  parts=parts.filter(p=>p.life>0);
+}
+
+// ── DRAW ──
+function draw(){
+  ct.fillStyle='#030008';ct.fillRect(0,0,W,H);
+
+  // Subtle bg glow
+  const ag=ct.createRadialGradient(W/2,H/2,0,W/2,H/2,H*0.65);
+  ag.addColorStop(0,'rgba(255,80,0,0.04)');ag.addColorStop(1,'rgba(0,0,0,0)');
+  ct.fillStyle=ag;ct.fillRect(0,0,W,H);
+
+  // Chain radius hints - visible so players know coverage
+  if(movesLeft>0&&pendingExplosions===0){
+    atoms.forEach(a=>{
+      if(!a.alive||a.blocker)return;
+      ct.strokeStyle='rgba('+a.glow+',0.12)';ct.lineWidth=1;ct.setLineDash([3,4]);
+      ct.beginPath();ct.arc(a.x,a.y,a.chainR,0,Math.PI*2);ct.stroke();
+      ct.setLineDash([]);
+    });
+  }
+
+  // Draw atoms
+  atoms.forEach(a=>{
+    if(!a.alive&&a.explodeAnim<=0)return;
+    const pulse=1+Math.sin(frame*0.08+a.pulseOff)*0.1;
+    const sc2=a.alive?pulse:(1+a.explodeAnim*4);
+    const alpha=a.alive?1:Math.min(1,a.explodeAnim*2.5);
+
+    ct.save();ct.translate(a.x,a.y);ct.globalAlpha=alpha;
+
+    if(a.blocker){
+      // Shield blocker
+      const bg2=ct.createRadialGradient(-4,-4,2,0,0,a.r);
+      bg2.addColorStop(0,'#999');bg2.addColorStop(1,'#333');
+      ct.fillStyle=bg2;ct.beginPath();ct.arc(0,0,a.r,0,Math.PI*2);ct.fill();
+      ct.strokeStyle='rgba(180,180,180,0.5)';ct.lineWidth=2;ct.stroke();
+      // Pulsing danger ring
+      ct.strokeStyle=`rgba(150,150,150,${0.15+Math.sin(frame*0.1+a.pulseOff)*0.08})`;
+      ct.lineWidth=1;ct.setLineDash([3,3]);
+      ct.beginPath();ct.arc(0,0,a.r*1.8,0,Math.PI*2);ct.stroke();
+      ct.setLineDash([]);
+      ct.font=Math.floor(a.r*1.1)+'px serif';ct.textAlign='center';ct.textBaseline='middle';
+      ct.fillStyle='rgba(255,255,255,0.7)';ct.fillText('🛡',0,1);
+      ct.restore();return;
+    }
+
+    // Normal atom
+    // Glow
+    const glowR=a.r*sc2*2.8;
+    const gg=ct.createRadialGradient(0,0,a.r*0.2,0,0,glowR);
+    gg.addColorStop(0,'rgba('+a.glow+',0.55)');
+    gg.addColorStop(1,'rgba('+a.glow+',0)');
+    ct.fillStyle=gg;ct.beginPath();ct.arc(0,0,glowR,0,Math.PI*2);ct.fill();
+
+    // Core
+    const cg=ct.createRadialGradient(-a.r*0.3,-a.r*0.3,a.r*0.05,0,0,a.r*sc2);
+    cg.addColorStop(0,'rgba(255,255,255,0.92)');
+    cg.addColorStop(0.25,a.col);
+    cg.addColorStop(1,a.col+'aa');
+    ct.fillStyle=cg;ct.beginPath();ct.arc(0,0,a.r*sc2,0,Math.PI*2);ct.fill();
+
+    // Shine
+    ct.fillStyle='rgba(255,255,255,0.38)';
+    ct.beginPath();ct.ellipse(-a.r*0.28,-a.r*0.28,a.r*0.3,a.r*0.17,-0.4,0,Math.PI*2);ct.fill();
+
+    // Orbiting electrons
+    if(a.alive){
+      a.orbs.forEach(o=>{
+        const ex=Math.cos(o.angle)*o.dist*sc2;
+        const ey=Math.sin(o.angle)*o.dist*sc2;
+        ct.fillStyle='rgba(255,255,255,0.75)';
+        ct.beginPath();ct.arc(ex,ey,2.2,0,Math.PI*2);ct.fill();
+        ct.strokeStyle='rgba('+a.glow+',0.4)';ct.lineWidth=1;
+        ct.beginPath();
+        for(let t=1;t<=4;t++){
+          const ta=o.angle-o.spd*t*4;
+          t===1?ct.moveTo(Math.cos(ta)*o.dist*sc2,Math.sin(ta)*o.dist*sc2):ct.lineTo(Math.cos(ta)*o.dist*sc2,Math.sin(ta)*o.dist*sc2);
+        }
+        ct.stroke();
+      });
+    }
+    ct.restore();
+  });
+
+  // Particles
+  parts.forEach(p=>{ct.globalAlpha=p.life;ct.fillStyle=p.col;ct.beginPath();ct.arc(p.x,p.y,p.r,0,Math.PI*2);ct.fill();});
+  ct.globalAlpha=1;
+
+  // ── HUD ──
+  ct.fillStyle='rgba(0,0,0,0.72)';ct.fillRect(0,0,W,56);
+
+  // Score (left)
+  ct.fillStyle='#ff6600';ct.font='bold '+Math.min(19,Math.floor(W*0.048))+'px Courier New';ct.textAlign='left';
+  ct.fillText('⭐ '+Math.floor(score),10,22);
+  ct.fillStyle='#7a3300';ct.font=Math.min(11,Math.floor(W*0.028))+'px Courier New';
+  ct.fillText('BEST: '+best,10,38);
+
+  // Level + diff (center)
+  const cfg=getLevelConfig(level);
+  ct.textAlign='center';
+  ct.fillStyle=cfg.color;ct.font='bold '+Math.min(17,Math.floor(W*0.043))+'px Courier New';
+  ct.fillText('LVL '+level+' · '+cfg.diff,W/2,20);
+
+  // Atoms left count
+  const aliveN=atoms.filter(a=>a.alive&&!a.blocker).length;
+  const totalN=atoms.filter(a=>!a.blocker).length;
+  ct.fillStyle='rgba(255,100,0,0.6)';ct.font=Math.min(11,Math.floor(W*0.028))+'px Courier New';
+  ct.fillText('💥 '+aliveN+' atoms left',W/2,36);
+
+  // Progress bar (atoms destroyed)
+  const pct=1-aliveN/totalN;
+  const bw=Math.min(160,W*0.35),bx=W/2-bw/2;
+  ct.fillStyle='rgba(255,100,0,0.12)';ct.fillRect(bx,42,bw,7);
+  const pCol=pct>=1?'#00ff88':pct>=0.7?'#ffe600':'#ff6600';
+  ct.fillStyle=pCol;ct.fillRect(bx,42,bw*pct,7);
+  ct.strokeStyle='rgba(255,100,0,0.3)';ct.lineWidth=1;ct.strokeRect(bx,42,bw,7);
+
+  // Moves (right)
+  ct.textAlign='right';
+  const mCol=movesLeft<=1?'#ff2200':movesLeft<=2?'#ff8800':'#ffe600';
+  ct.fillStyle=mCol;ct.font='bold '+Math.min(22,Math.floor(W*0.055))+'px Courier New';
+  ct.fillText(movesLeft,W-12,26);
+  ct.fillStyle='#7a3300';ct.font=Math.min(10,Math.floor(W*0.025))+'px Courier New';
+  ct.fillText('MOVES',W-12,40);
+  // Move circles
+  for(let i=0;i<totalMoves;i++){
+    const mx=W-12-i*14;
+    ct.fillStyle=i<movesLeft?mCol:'rgba(100,100,100,0.3)';
+    ct.beginPath();ct.arc(mx,50,4,0,Math.PI*2);ct.fill();
+  }
+
+  // Chain counter mid-screen
+  if(totalChain>=3){
+    ct.textAlign='center';
+    ct.globalAlpha=0.65+Math.sin(frame*0.18)*0.3;
+    ct.fillStyle=totalChain>=10?'#ff006e':totalChain>=5?'#ffe600':'#ff6600';
+    ct.font='bold '+Math.min(36,Math.floor(W*0.09))+'px Courier New';
+    ct.fillText('⚡ x'+totalChain,W/2,H*0.5);
+    ct.globalAlpha=1;
+  }
+
+  // Flash message
+  if(flashMsg.t>0){
+    ct.globalAlpha=Math.min(1,flashMsg.t/25);
+    ct.fillStyle=flashMsg.col;ct.font='bold '+Math.min(24,Math.floor(W*0.06))+'px Courier New';
+    ct.textAlign='center';ct.fillText(flashMsg.text,W/2,H*0.43);
+    ct.globalAlpha=1;
+  }
+
+  // Tap hint
+  if(frame<160&&movesLeft===totalMoves){
+    ct.globalAlpha=(160-frame)/60;
+    ct.fillStyle='rgba(255,100,0,0.55)';
+    ct.font=Math.min(13,Math.floor(W*0.033))+'px Courier New';
+    ct.textAlign='center';
+    ct.fillText('TAP ANY GLOWING ATOM!',W/2,H-14);
+    ct.globalAlpha=1;
+  }
+}
+
+// ── LOOP ──
+let raf=null,lastT=0;
+function loop(ts){
+  raf=requestAnimationFrame(loop);
+  Math.min(ts-lastT,50);lastT=ts;
+  if(state==='play'){update();draw();}else draw();
+}
+
+// ── SCREENS ──
+function showPanel(id){
+  ['pStart','pLevel','pWin','pLose'].forEach(p=>document.getElementById(p).style.display='none');
+  document.getElementById(id).style.display='block';
+  document.getElementById('overlay').style.display='flex';
+}
+function hideOverlay(){document.getElementById('overlay').style.display='none';}
+
+function showLevelIntro(){
+  const cfg=getLevelConfig(level);
+  document.getElementById('lvlTitle').textContent='LEVEL '+level;
+  document.getElementById('lvlIcon').textContent=cfg.icon;
+  document.getElementById('lvlDiff').textContent=cfg.diff;
+  document.getElementById('lvlDiff').style.color=cfg.color;
+  document.getElementById('lvlAtoms').textContent=cfg.atoms;
+  document.getElementById('lvlBlock').textContent=cfg.blockers;
+  document.getElementById('lvlMoves').textContent=cfg.moves;
+  showPanel('pLevel');
+}
+
+function startLevel(){
+  gac();startBG();
+  spawnLevel(level);
+  state='play';hideOverlay();
+}
+function nextLevel(){
+  level++;
+  saveProgress();
+  showLevelIntro();
+}
+function retryLevel(){showLevelIntro();}
+function goMenu(){state='menu';stopBG();showPanel('pStart');}
+function startGame(){
+  score=0;level=1;
+  saveProgress();
+  showLevelIntro();
+}
+
+document.getElementById('bStart').onclick=startGame;
+document.getElementById('bContinue').onclick=()=>{showLevelIntro();};
+document.getElementById('bLevelPlay').onclick=startLevel;
+document.getElementById('bLevelMenu').onclick=goMenu;
+document.getElementById('bNext').onclick=nextLevel;
+document.getElementById('bMenuW').onclick=goMenu;
+document.getElementById('bRetry').onclick=retryLevel;
+document.getElementById('bMenuL').onclick=goMenu;
+
+// Input
+cv.addEventListener('click',e=>handleTap(e.clientX,e.clientY));
+cv.addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0];handleTap(t.clientX,t.clientY);},{passive:false});
+
+// Firebase save/load
+function saveProgress(){
+  if(!fbUid)return;
+  fetch(FB_URL+'/chainreaction/'+fbUid+'.json',{
+    method:'PUT',
+    body:JSON.stringify({level:level,best:best})
+  }).catch(()=>{});
+}
+
+function loadProgress(){
+  if(!fbUid){showPanel('pStart');return;}
+  fetch(FB_URL+'/chainreaction/'+fbUid+'.json')
+    .then(r=>r.json())
+    .then(data=>{
+      if(data&&data.level&&data.level>1){
+        level=data.level;
+        best=data.best||0;
+        const cb=document.getElementById('bContinue');
+        cb.style.display='block';
+        cb.textContent='▶ CONTINUE (LVL '+level+')';
+      }
+      showPanel('pStart');
+    })
+    .catch(()=>showPanel('pStart'));
+}
+
+// Listen for UID from parent HyperNova website
+window.addEventListener('message',function(e){
+  if(e.data&&e.data.type==='hypernova_uid'){
+    fbUid=e.data.uid;
+    loadProgress();
+  }
+});
+
+// Also check if running standalone (direct open)
+setTimeout(()=>{
+  // If no uid received in 1 sec, just show start
+  if(!fbUid)showPanel('pStart');
+},1000);
+
+if(!raf)raf=requestAnimationFrame(loop);
+</script>
+</body>
+</html>
